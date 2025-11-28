@@ -4,6 +4,19 @@ Checks user inputs for safety violations.
 """
 
 from typing import Dict, Any, List
+import logging
+
+# Try to import Guardrails AI
+try:
+    from guardrails import Guard
+    GUARDRAILS_AVAILABLE = True
+    # Note: guardrails-ai 0.6.8+ uses a different validator API
+    # We'll use fallback validators that work regardless
+    GUARDRAILS_VALIDATORS_AVAILABLE = False
+except ImportError:
+    GUARDRAILS_AVAILABLE = False
+    GUARDRAILS_VALIDATORS_AVAILABLE = False
+    Guard = None
 
 
 class InputGuardrail:
@@ -25,15 +38,25 @@ class InputGuardrail:
             config: Configuration dictionary
         """
         self.config = config
+        self.logger = logging.getLogger("safety.input_guardrail")
 
-        # TODO: Initialize guardrail framework
-        # Example with Guardrails AI:
-        # from guardrails import Guard
-        # from guardrails.validators import ValidLength, ToxicLanguage
-        # self.guard = Guard().use_many(
-        #     ValidLength(min=10, max=1000),
-        #     ToxicLanguage(threshold=0.5)
-        # )
+        # Initialize guardrail framework
+        # Note: guardrails-ai 0.6.8+ has a different API structure
+        # We use fallback validators that are more reliable
+        if GUARDRAILS_AVAILABLE and GUARDRAILS_VALIDATORS_AVAILABLE:
+            try:
+                # Try to use Guardrails AI if validators are available
+                self.guard = Guard()
+                self.logger.info("Guardrails AI input guard initialized (basic)")
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize Guardrails AI: {e}")
+                self.guard = None
+        else:
+            self.guard = None
+            if GUARDRAILS_AVAILABLE:
+                self.logger.info("Guardrails AI installed but using fallback validators (newer API)")
+            else:
+                self.logger.info("Guardrails AI not available. Using fallback validation.")
 
     def validate(self, query: str) -> Dict[str, Any]:
         """
@@ -54,26 +77,58 @@ class InputGuardrail:
         """
         violations = []
 
-        # TODO: Implement actual validation
-        # Example structure:
-        # result = self.guard.validate(query)
-        # if not result.validation_passed:
-        #     violations = result.errors
+        # Use Guardrails AI if available
+        if self.guard is not None:
+            try:
+                result = self.guard.validate(query)
+                if not result.validation_passed:
+                    # Guardrails AI returns validation results
+                    if hasattr(result, 'errors') and result.errors:
+                        violations.extend([
+                            {
+                                "validator": "guardrails",
+                                "reason": str(error),
+                                "severity": "high"
+                            }
+                            for error in result.errors
+                        ])
+                    elif hasattr(result, 'error') and result.error:
+                        violations.append({
+                            "validator": "guardrails",
+                            "reason": str(result.error),
+                            "severity": "high"
+                        })
+            except Exception as e:
+                # If validation fails, log and continue with fallback
+                self.logger.warning(f"Guardrails validation error: {e}")
+                violations.append({
+                    "validator": "guardrails_error",
+                    "reason": f"Validation error: {str(e)}",
+                    "severity": "medium"
+                })
 
-        # Placeholder checks
+        # Fallback validation checks
         if len(query) < 5:
             violations.append({
                 "validator": "length",
-                "reason": "Query too short",
+                "reason": "Query too short (minimum 5 characters)",
                 "severity": "low"
             })
 
         if len(query) > 2000:
             violations.append({
                 "validator": "length",
-                "reason": "Query too long",
+                "reason": "Query too long (maximum 2000 characters)",
                 "severity": "medium"
             })
+
+        # Check for prompt injection
+        injection_violations = self._check_prompt_injection(query)
+        violations.extend(injection_violations)
+
+        # Check for relevance (optional)
+        relevance_violations = self._check_relevance(query)
+        violations.extend(relevance_violations)
 
         return {
             "valid": len(violations) == 0,

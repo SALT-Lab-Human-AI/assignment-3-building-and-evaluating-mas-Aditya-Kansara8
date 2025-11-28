@@ -5,6 +5,19 @@ Checks system outputs for safety violations.
 
 from typing import Dict, Any, List
 import re
+import logging
+
+# Try to import Guardrails AI
+try:
+    from guardrails import Guard
+    GUARDRAILS_AVAILABLE = True
+    # Note: guardrails-ai 0.6.8+ uses a different validator API
+    # We'll use fallback validators that work regardless
+    GUARDRAILS_VALIDATORS_AVAILABLE = False
+except ImportError:
+    GUARDRAILS_AVAILABLE = False
+    GUARDRAILS_VALIDATORS_AVAILABLE = False
+    Guard = None
 
 
 class OutputGuardrail:
@@ -27,15 +40,25 @@ class OutputGuardrail:
             config: Configuration dictionary
         """
         self.config = config
+        self.logger = logging.getLogger("safety.output_guardrail")
 
-        # TODO: Initialize guardrail framework
-        # Example with Guardrails AI:
-        # from guardrails import Guard
-        # from guardrails.validators import ToxicLanguage, PIIFilter
-        # self.guard = Guard().use_many(
-        #     ToxicLanguage(threshold=0.5),
-        #     PIIFilter()
-        # )
+        # Initialize guardrail framework
+        # Note: guardrails-ai 0.6.8+ has a different API structure
+        # We use fallback validators that are more reliable
+        if GUARDRAILS_AVAILABLE and GUARDRAILS_VALIDATORS_AVAILABLE:
+            try:
+                # Try to use Guardrails AI if validators are available
+                self.guard = Guard()
+                self.logger.info("Guardrails AI output guard initialized (basic)")
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize Guardrails AI: {e}")
+                self.guard = None
+        else:
+            self.guard = None
+            if GUARDRAILS_AVAILABLE:
+                self.logger.info("Guardrails AI installed but using fallback validators (newer API)")
+            else:
+                self.logger.info("Guardrails AI not available. Using fallback validation.")
 
     def validate(self, response: str, sources: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
@@ -56,14 +79,39 @@ class OutputGuardrail:
         - Check for bias
         """
         violations = []
+        sanitized_output = response
 
-        # TODO: Implement actual validation
-        # Example:
-        # result = self.guard.validate(response)
-        # if not result.validation_passed:
-        #     violations = result.errors
+        # Use Guardrails AI if available
+        if self.guard is not None:
+            try:
+                result = self.guard.validate(response)
+                if not result.validation_passed:
+                    # Guardrails AI returns validation results
+                    if hasattr(result, 'errors') and result.errors:
+                        violations.extend([
+                            {
+                                "validator": "guardrails",
+                                "reason": str(error),
+                                "severity": "high"
+                            }
+                            for error in result.errors
+                        ])
+                    elif hasattr(result, 'error') and result.error:
+                        violations.append({
+                            "validator": "guardrails",
+                            "reason": str(result.error),
+                            "severity": "high"
+                        })
+            except Exception as e:
+                # If validation fails, log and continue with fallback
+                self.logger.warning(f"Guardrails validation error: {e}")
+                violations.append({
+                    "validator": "guardrails_error",
+                    "reason": f"Validation error: {str(e)}",
+                    "severity": "medium"
+                })
 
-        # Placeholder checks
+        # Fallback validation checks
         pii_violations = self._check_pii(response)
         violations.extend(pii_violations)
 
@@ -74,10 +122,14 @@ class OutputGuardrail:
             consistency_violations = self._check_factual_consistency(response, sources)
             violations.extend(consistency_violations)
 
+        # Sanitize if violations found
+        if violations:
+            sanitized_output = self._sanitize(response, violations)
+
         return {
             "valid": len(violations) == 0,
             "violations": violations,
-            "sanitized_output": self._sanitize(response, violations) if violations else response
+            "sanitized_output": sanitized_output
         }
 
     def _check_pii(self, text: str) -> List[Dict[str, Any]]:

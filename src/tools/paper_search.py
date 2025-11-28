@@ -16,7 +16,7 @@ import asyncio
 class PaperSearchTool:
     """
     Tool for searching academic papers via Semantic Scholar API.
-    
+
     Semantic Scholar provides free access to academic papers with
     rich metadata including citations, abstracts, and author information.
     API key is optional but recommended for higher rate limits.
@@ -34,7 +34,7 @@ class PaperSearchTool:
 
         # API key is optional for Semantic Scholar
         self.api_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
-        
+
         if not self.api_key:
             self.logger.info("No Semantic Scholar API key found. Using anonymous access (lower rate limits)")
 
@@ -73,37 +73,41 @@ class PaperSearchTool:
         """
         self.logger.info(f"Searching papers: {query}")
 
-        try:
-            from semanticscholar import SemanticScholar
-            
-            # Initialize Semantic Scholar client
-            sch = SemanticScholar(api_key=self.api_key)
-            
-            # Define fields to retrieve
-            fields = kwargs.get("fields", [
-                "paperId", "title", "authors", "year", "abstract",
-                "citationCount", "url", "venue", "openAccessPdf"
-            ])
-            
-            # Perform search
-            results = sch.search_paper(
-                query, 
-                limit=self.max_results,
-                fields=fields
-            )
-            
-            # Parse and filter results
-            papers = self._parse_results(results, year_from, year_to, min_citations)
-            
-            self.logger.info(f"Found {len(papers)} papers")
-            return papers
-            
-        except ImportError:
-            self.logger.error("semanticscholar library not installed. Run: pip install semanticscholar")
-            return []
-        except Exception as e:
-            self.logger.error(f"Error searching papers: {e}")
-            return []
+        # SEMANTIC SCHOLAR API DISABLED - Commented out for now
+        self.logger.info("Semantic Scholar API is currently disabled")
+        return []
+
+        # try:
+        #     from semanticscholar import SemanticScholar
+        #
+        #     # Initialize Semantic Scholar client
+        #     sch = SemanticScholar(api_key=self.api_key)
+        #
+        #     # Define fields to retrieve
+        #     fields = kwargs.get("fields", [
+        #         "paperId", "title", "authors", "year", "abstract",
+        #         "citationCount", "url", "venue", "openAccessPdf"
+        #     ])
+        #
+        #     # Perform search
+        #     results = sch.search_paper(
+        #         query,
+        #         limit=self.max_results,
+        #         fields=fields
+        #     )
+        #
+        #     # Parse and filter results
+        #     papers = self._parse_results(results, year_from, year_to, min_citations)
+        #
+        #     self.logger.info(f"Found {len(papers)} papers")
+        #     return papers
+        #
+        # except ImportError:
+        #     self.logger.error("semanticscholar library not installed. Run: pip install semanticscholar")
+        #     return []
+        # except Exception as e:
+        #     self.logger.error(f"Error searching papers: {e}")
+        #     return []
 
     async def get_paper_details(self, paper_id: str) -> Dict[str, Any]:
         """
@@ -115,26 +119,30 @@ class PaperSearchTool:
         Returns:
             Detailed paper information
         """
-        try:
-            from semanticscholar import SemanticScholar
-            
-            sch = SemanticScholar(api_key=self.api_key)
-            paper = sch.get_paper(paper_id)
-            
-            return {
-                "paper_id": paper.paperId,
-                "title": paper.title,
-                "authors": [{"name": a.name} for a in paper.authors] if paper.authors else [],
-                "year": paper.year,
-                "abstract": paper.abstract,
-                "citation_count": paper.citationCount,
-                "url": paper.url,
-                "venue": paper.venue,
-                "pdf_url": paper.openAccessPdf.get("url") if paper.openAccessPdf else None,
-            }
-        except Exception as e:
-            self.logger.error(f"Error getting paper details: {e}")
-            return {}
+        # SEMANTIC SCHOLAR API DISABLED - Commented out for now
+        self.logger.info("Semantic Scholar API is currently disabled")
+        return {}
+
+        # try:
+        #     from semanticscholar import SemanticScholar
+        #
+        #     sch = SemanticScholar(api_key=self.api_key)
+        #     paper = sch.get_paper(paper_id)
+        #
+        #     return {
+        #         "paper_id": paper.paperId,
+        #         "title": paper.title,
+        #         "authors": [{"name": a.name} for a in paper.authors] if paper.authors else [],
+        #         "year": paper.year,
+        #         "abstract": paper.abstract,
+        #         "citation_count": paper.citationCount,
+        #         "url": paper.url,
+        #         "venue": paper.venue,
+        #         "pdf_url": paper.openAccessPdf.get("url") if paper.openAccessPdf else None,
+        #     }
+        # except Exception as e:
+        #     self.logger.error(f"Error getting paper details: {e}")
+        #     return {}
 
     async def get_citations(self, paper_id: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
@@ -147,24 +155,28 @@ class PaperSearchTool:
         Returns:
             List of citing papers
         """
-        try:
-            from semanticscholar import SemanticScholar
-            
-            sch = SemanticScholar(api_key=self.api_key)
-            paper = sch.get_paper(paper_id)
-            citations = paper.citations[:limit] if paper.citations else []
-            
-            return [
-                {
-                    "paper_id": c.paperId,
-                    "title": c.title,
-                    "year": c.year,
-                }
-                for c in citations
-            ]
-        except Exception as e:
-            self.logger.error(f"Error getting citations: {e}")
-            return []
+        # SEMANTIC SCHOLAR API DISABLED - Commented out for now
+        self.logger.info("Semantic Scholar API is currently disabled")
+        return []
+
+        # try:
+        #     from semanticscholar import SemanticScholar
+        #
+        #     sch = SemanticScholar(api_key=self.api_key)
+        #     paper = sch.get_paper(paper_id)
+        #     citations = paper.citations[:limit] if paper.citations else []
+        #
+        #     return [
+        #         {
+        #             "paper_id": c.paperId,
+        #             "title": c.title,
+        #             "year": c.year,
+        #         }
+        #         for c in citations
+        #     ]
+        # except Exception as e:
+        #     self.logger.error(f"Error getting citations: {e}")
+        #     return []
 
     async def get_references(self, paper_id: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
@@ -177,24 +189,28 @@ class PaperSearchTool:
         Returns:
             List of referenced papers
         """
-        try:
-            from semanticscholar import SemanticScholar
-            
-            sch = SemanticScholar(api_key=self.api_key)
-            paper = sch.get_paper(paper_id)
-            references = paper.references[:limit] if paper.references else []
-            
-            return [
-                {
-                    "paper_id": r.paperId,
-                    "title": r.title,
-                    "year": r.year,
-                }
-                for r in references
-            ]
-        except Exception as e:
-            self.logger.error(f"Error getting references: {e}")
-            return []
+        # SEMANTIC SCHOLAR API DISABLED - Commented out for now
+        self.logger.info("Semantic Scholar API is currently disabled")
+        return []
+
+        # try:
+        #     from semanticscholar import SemanticScholar
+        #
+        #     sch = SemanticScholar(api_key=self.api_key)
+        #     paper = sch.get_paper(paper_id)
+        #     references = paper.references[:limit] if paper.references else []
+        #
+        #     return [
+        #         {
+        #             "paper_id": r.paperId,
+        #             "title": r.title,
+        #             "year": r.year,
+        #         }
+        #         for r in references
+        #     ]
+        # except Exception as e:
+        #     self.logger.error(f"Error getting references: {e}")
+        #     return []
 
     def _parse_results(
         self,
@@ -205,23 +221,23 @@ class PaperSearchTool:
     ) -> List[Dict[str, Any]]:
         """
         Parse and filter search results from Semantic Scholar.
-        
+
         Args:
             results: Raw results from Semantic Scholar API
             year_from: Minimum year filter
             year_to: Maximum year filter
             min_citations: Minimum citation count filter
-            
+
         Returns:
             Filtered and formatted list of papers
         """
         papers = []
-        
+
         for paper in results:
             # Skip papers without basic metadata
             if not paper or not hasattr(paper, 'title'):
                 continue
-                
+
             paper_dict = {
                 "paper_id": paper.paperId if hasattr(paper, 'paperId') else None,
                 "title": paper.title if hasattr(paper, 'title') else "Unknown",
@@ -233,13 +249,13 @@ class PaperSearchTool:
                 "venue": paper.venue if hasattr(paper, 'venue') else "",
                 "pdf_url": paper.openAccessPdf.get("url") if hasattr(paper, 'openAccessPdf') and paper.openAccessPdf else None,
             }
-            
+
             papers.append(paper_dict)
-        
+
         # Apply filters
         papers = self._filter_by_year(papers, year_from, year_to)
         papers = self._filter_by_citations(papers, min_citations)
-        
+
         return papers
 
     def _filter_by_year(
@@ -269,41 +285,44 @@ class PaperSearchTool:
 def paper_search(query: str, max_results: int = 10, year_from: Optional[int] = None) -> str:
     """
     Synchronous wrapper for paper search (for AutoGen tool integration).
-    
+
     Args:
         query: Search query
         max_results: Maximum results to return
         year_from: Only return papers from this year onwards
-        
+
     Returns:
         Formatted string with paper results
     """
-    tool = PaperSearchTool(max_results=max_results)
-    results = asyncio.run(tool.search(query, year_from=year_from))
-    
-    if not results:
-        return "No academic papers found."
-    
-    # Format results as readable text
-    output = f"Found {len(results)} academic papers for '{query}':\n\n"
-    
-    for i, paper in enumerate(results, 1):
-        authors = ", ".join([a["name"] for a in paper["authors"][:3]])
-        if len(paper["authors"]) > 3:
-            authors += " et al."
-            
-        output += f"{i}. {paper['title']}\n"
-        output += f"   Authors: {authors}\n"
-        output += f"   Year: {paper['year']} | Citations: {paper['citation_count']}"
-        if paper.get('venue'):
-            output += f" | Venue: {paper['venue']}"
-        output += "\n"
-        
-        if paper.get('abstract'):
-            abstract = paper['abstract'][:200] + "..." if len(paper['abstract']) > 200 else paper['abstract']
-            output += f"   Abstract: {abstract}\n"
-            
-        output += f"   URL: {paper['url']}\n"
-        output += "\n"
-    
-    return output
+    # SEMANTIC SCHOLAR API DISABLED - Commented out for now
+    return "Paper search (Semantic Scholar) is currently disabled."
+
+    # tool = PaperSearchTool(max_results=max_results)
+    # results = asyncio.run(tool.search(query, year_from=year_from))
+    #
+    # if not results:
+    #     return "No academic papers found."
+    #
+    # # Format results as readable text
+    # output = f"Found {len(results)} academic papers for '{query}':\n\n"
+    #
+    # for i, paper in enumerate(results, 1):
+    #     authors = ", ".join([a["name"] for a in paper["authors"][:3]])
+    #     if len(paper["authors"]) > 3:
+    #         authors += " et al."
+    #
+    #     output += f"{i}. {paper['title']}\n"
+    #     output += f"   Authors: {authors}\n"
+    #     output += f"   Year: {paper['year']} | Citations: {paper['citation_count']}"
+    #     if paper.get('venue'):
+    #         output += f" | Venue: {paper['venue']}"
+    #     output += "\n"
+    #
+    #     if paper.get('abstract'):
+    #         abstract = paper['abstract'][:200] + "..." if len(paper['abstract']) > 200 else paper['abstract']
+    #         output += f"   Abstract: {abstract}\n"
+    #
+    #     output += f"   URL: {paper['url']}\n"
+    #     output += "\n"
+    #
+    # return output

@@ -1,3 +1,4 @@
+[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/r1tAQ0HC)
 # Multi-Agent Research System - Assignment 3
 
 A multi-agent system for deep research on HCI topics, featuring orchestrated agents, safety guardrails, and LLM-as-a-Judge evaluation.
@@ -131,27 +132,30 @@ cp .env.example .env
 Edit `.env` and add your API keys:
 
 ```bash
-# Required: At least one LLM API
-GROQ_API_KEY=your_groq_api_key_here
-# OR
+# Required: OpenAI API key for LLM (primary)
 OPENAI_API_KEY=your_openai_api_key_here
+
+# Backup: Groq API key for LLM (used if OpenAI is unavailable)
+GROQ_API_KEY=your_groq_api_key_here
 
 # Recommended: At least one search API
 TAVILY_API_KEY=your_tavily_api_key_here
 # OR
 BRAVE_API_KEY=your_brave_api_key_here
 
-# Optional: For academic paper search
+# Optional: For academic paper search (works without key, but with lower rate limits)
 SEMANTIC_SCHOLAR_API_KEY=your_key_here
 ```
 
 #### Getting API Keys
 
-- **Groq** (Recommended for students): [https://console.groq.com](https://console.groq.com) - Free tier available
-- **OpenAI**: [https://platform.openai.com](https://platform.openai.com) - Paid, requires credits
+- **OpenAI** (Primary): [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys) - Paid, but high quality
+- **Groq** (Backup): [https://console.groq.com](https://console.groq.com) - Free tier available
 - **Tavily**: [https://www.tavily.com](https://www.tavily.com) - Student free quota available
 - **Brave Search**: [https://brave.com/search/api](https://brave.com/search/api)
-- **Semantic Scholar**: [https://www.semanticscholar.org/product/api](https://www.semanticscholar.org/product/api) - Free tier available
+- **Semantic Scholar**: [https://www.semanticscholar.org/product/api](https://www.semanticscholar.org/product/api) - **Optional** - Works without API key (anonymous access with lower rate limits), but API key recommended for higher rate limits
+
+**Note**: The system uses OpenAI as the primary provider by default. If `OPENAI_API_KEY` is not set, it will automatically fall back to Groq. You can configure this in `config.yaml`.
 
 ### 5. Configuration
 
@@ -159,7 +163,7 @@ Edit `config.yaml` to customize your system:
 
 - Choose your research topic
 - **Configure agent prompts** (see below)
-- Set model preferences (Groq vs OpenAI)
+- Set model preferences (OpenAI primary, Groq backup)
 - Define safety policies
 - Configure evaluation criteria
 
