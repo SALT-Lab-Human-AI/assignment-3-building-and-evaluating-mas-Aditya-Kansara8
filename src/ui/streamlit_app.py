@@ -353,31 +353,7 @@ def display_response(result: Dict[str, Any]):
 
     st.divider()
 
-    # Display workflow stages below the response (terminal-like format)
-    workflow_stages = result.get("workflow_stages", [])
-    st.markdown("### 🔄 Workflow Stages")
-    st.markdown("----------------------------------------------------------------------")
-    if workflow_stages:
-        stage_icons = {
-            "planning": "📋",
-            "researching": "🔍",
-            "writing": "✍️",
-            "critiquing": "✅",
-            "revising": "🔄"
-        }
-        for stage in workflow_stages:
-            icon = stage_icons.get(stage, "•")
-            st.markdown(f"  {icon} {stage.replace('_', ' ').title()}")
-    else:
-        st.markdown("  ⚠️ No workflow stages recorded")
-    st.markdown("----------------------------------------------------------------------")
-
-    st.divider()
-
-    # Display agent context and exchanges
-    display_agent_context_and_exchanges(result)
-
-    # Display citations and sources
+    # Display citations and sources (right after response, before workflow stages)
     citations, sources = extract_citations_and_sources(result)
     if citations or sources:
         with st.expander("📚 Citations & Sources", expanded=True):
@@ -399,6 +375,29 @@ def display_response(result: Dict[str, Any]):
                 st.markdown("#### URLs Referenced")
                 for i, citation in enumerate(citations, 1):
                     st.markdown(f"**[{i}]** [{citation}]({citation})")
+
+    st.divider()
+
+    # Display workflow stages below the response (terminal-like format)
+    workflow_stages = result.get("workflow_stages", [])
+    st.markdown("### 🔄 Workflow Stages")
+    st.markdown("----------------------------------------------------------------------")
+    if workflow_stages:
+        stage_icons = {
+            "planning": "📋",
+            "researching": "🔍",
+            "writing": "✍️",
+            "critiquing": "✅",
+            "revising": "🔄"
+        }
+        for stage in workflow_stages:
+            icon = stage_icons.get(stage, "•")
+            st.markdown(f"  {icon} {stage.replace('_', ' ').title()}")
+    else:
+        st.markdown("  ⚠️ No workflow stages recorded")
+    st.markdown("----------------------------------------------------------------------")
+
+    st.divider()
 
     # Display metadata metrics
     metadata = result.get("metadata", {})
@@ -636,7 +635,7 @@ def display_sidebar():
         # Get statistics from history
         total_queries = len(st.session_state.history)
         total_safety_events = sum(
-            len(result.get("metadata", {}).get("safety_events", []))
+            len(item.get("result", {}).get("metadata", {}).get("safety_events", []))
             for item in st.session_state.history
             if item.get("result", {}).get("metadata", {}).get("safety_events")
         )
