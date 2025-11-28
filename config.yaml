@@ -28,6 +28,10 @@ agents:
     # If provided, ensure it mentions tools and includes: "RESEARCH COMPLETE"
     system_prompt: ""  # Empty = use default prompt
     max_sources: 10
+    # Enhanced research configuration
+    max_iterations: 2  # Number of iterative refinement rounds
+    min_relevance_score: 0.3  # Minimum relevance score (0-1) to include source
+    deduplication_threshold: 0.85  # Similarity threshold (0-1) for deduplication
     # Example custom prompt:
     # system_prompt: |
     #   You are a research specialist in HCI and UX design.

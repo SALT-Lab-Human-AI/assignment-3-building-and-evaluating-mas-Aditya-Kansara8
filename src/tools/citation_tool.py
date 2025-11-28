@@ -6,7 +6,7 @@ This tool provides citation formatting in multiple styles (primarily APA)
 and manages a bibliography for research outputs.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 import re
 
@@ -322,6 +322,57 @@ class CitationTool:
             if existing.get("title") == source.get("title"):
                 return i + 1
         return 0
+
+    def format_intext_citation(
+        self,
+        source: Dict[str, Any],
+        page_number: Optional[int] = None,
+        is_direct_quote: bool = False
+    ) -> str:
+        """
+        Format an in-text citation with optional page number.
+
+        Args:
+            source: Source information dictionary
+            page_number: Optional page number for the citation
+            is_direct_quote: Whether this is a direct quote (affects format)
+
+        Returns:
+            Formatted in-text citation string (e.g., "(Author, 2023, p. 5)" or "(Author, 2023)")
+        """
+        authors = source.get("authors", [])
+        year = source.get("year", "n.d.")
+
+        if not authors:
+            # Use title or site name as fallback
+            author_str = source.get("site_name") or source.get("title", "Unknown")[:30]
+        elif len(authors) == 1:
+            author_str = self._format_single_author(authors[0].get("name", "Unknown"))
+        elif len(authors) == 2:
+            name1 = self._format_single_author(authors[0].get("name", "Unknown"))
+            name2 = self._format_single_author(authors[1].get("name", "Unknown"))
+            author_str = f"{name1} & {name2}"
+        else:
+            first_author = self._format_single_author(authors[0].get("name", "Unknown"))
+            author_str = f"{first_author} et al."
+
+        # Build citation
+        if page_number is not None:
+            if is_direct_quote:
+                citation = f"({author_str}, {year}, p. {page_number})"
+            else:
+                citation = f"({author_str}, {year}, p. {page_number})"
+        else:
+            citation = f"({author_str}, {year})"
+
+        return citation
+
+    def get_source_by_title(self, title: str) -> Optional[Dict[str, Any]]:
+        """Get a source by its title."""
+        for source in self.citations:
+            if source.get("title") == title:
+                return source
+        return None
 
     def generate_bibliography(self) -> List[str]:
         """

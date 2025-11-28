@@ -18,6 +18,7 @@ beautifulsoup4
 aiohttp
 
 semanticscholar
+sentence-transformers  # For embedding-based relevance scoring and deduplication
 
 streamlit
 gradio
