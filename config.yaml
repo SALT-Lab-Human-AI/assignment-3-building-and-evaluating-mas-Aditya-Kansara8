@@ -62,19 +62,32 @@ agents:
     #   Say "APPROVED - RESEARCH COMPLETE" or "NEEDS REVISION".
 
 models:
-  # Default model for agents (Groq)
+  # Default model for agents (OpenAI primary, Groq as backup)
+  # Primary provider: OpenAI (set provider: "openai")
+  # Backup provider: Groq (set provider: "groq")
+  # NOTE: For OpenAI, use models like: gpt-4, gpt-4-turbo, gpt-3.5-turbo
+  # NOTE: For Groq, if you experience function calling errors, try switching to:
+  #   - llama-3.1-70b-versatile (recommended for function calling)
+  #   - llama-3.1-8b-instant
+  #   - mixtral-8x7b-32768
   default:
-    provider: "vllm"
-    name: "openai/gpt-oss-20b"
+    provider: "openai"  # Primary: "openai" or backup: "groq"
+    name: "gpt-4o"  # OpenAI model (e.g., gpt-4o, gpt-4-turbo, gpt-3.5-turbo) or Groq model
     temperature: 0.7
     max_tokens: 2048
+    # Backup configuration (used if primary provider fails)
+    backup_provider: "groq"
+    backup_name: "llama-3.1-70b-versatile"
 
-  # Judge model for evaluation
+  # Judge model for evaluation (OpenAI primary, Groq as backup)
   judge:
-    provider: "vllm"
-    name: "openai/gpt-oss-20b"
+    provider: "openai"  # Primary: "openai" or backup: "groq"
+    name: "gpt-4o-mini"  # OpenAI model (e.g., gpt-4o-mini, gpt-3.5-turbo) or Groq model
     temperature: 0.3
     max_tokens: 1024
+    # Backup configuration (used if primary provider fails)
+    backup_provider: "groq"
+    backup_name: "llama-3.1-8b-instant"
 
 tools:
   web_search:

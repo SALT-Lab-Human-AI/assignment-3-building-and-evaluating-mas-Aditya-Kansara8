@@ -1,5 +1,5 @@
 autogen-agentchat
-autogen-ext[openai,groq]
+autogen-ext[groq]
 
 langgraph
 langchain
@@ -7,7 +7,7 @@ langchain-core
 langchain-community
 
 groq
-openai
+openai  # Required for AutoGen's OpenAIChatCompletionClient (Groq uses OpenAI-compatible API)
 
 guardrails-ai
 nemoguardrails
@@ -35,5 +35,9 @@ black
 # Pre-commit hooks for security and code quality
 pre-commit
 detect-secrets
-gitleaks
+# NOTE: gitleaks is NOT a Python package - it's a Go binary tool
+# Install separately:
+#   macOS: brew install gitleaks
+#   Linux: See https://github.com/gitleaks/gitleaks#installation
+#   Or download from: https://github.com/gitleaks/gitleaks/releases
 bandit
