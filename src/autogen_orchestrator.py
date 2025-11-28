@@ -23,6 +23,7 @@ from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.messages import TextMessage
 
 from src.agents.autogen_agents import create_research_team
+from src.guardrails.safety_manager import SafetyManager
 
 
 class WorkflowStage(Enum):
@@ -61,6 +62,11 @@ class AutoGenOrchestrator:
         self.max_iterations = system_config.get("max_iterations", 10)
         self.timeout_seconds = system_config.get("timeout_seconds", 300)
 
+        # Initialize safety manager
+        safety_config = config.get("safety", {})
+        self.safety_manager = SafetyManager(safety_config)
+        self.logger.info(f"Safety manager initialized (enabled={self.safety_manager.enabled})")
+
         # Don't create team here - create it fresh for each query to avoid "already running" errors
         self.logger.info("AutoGen orchestrator initialized (team will be created per query)")
 
@@ -92,6 +98,28 @@ class AutoGenOrchestrator:
         self.current_stage = WorkflowStage.INITIALIZED
         self.revision_count = 0
         self.workflow_trace = []
+
+        # Check input safety before processing
+        input_safety = self.safety_manager.check_input_safety(query)
+        if not input_safety.get("safe", True):
+            self.logger.warning(f"Input safety check failed: {input_safety.get('violations', [])}")
+            self.current_stage = WorkflowStage.ERROR
+            return {
+                "query": query,
+                "error": "safety_violation",
+                "response": self.safety_manager.on_violation.get(
+                    "message",
+                    "I cannot process this request due to safety policies."
+                ),
+                "conversation_history": [],
+                "workflow_stages": [WorkflowStage.INITIALIZED.value, WorkflowStage.ERROR.value],
+                "metadata": {
+                    "error": True,
+                    "safety_violation": True,
+                    "input_safety": input_safety,
+                    "safety_events": self.safety_manager.get_safety_events()
+                }
+            }
 
         start_time = time.time()
 
@@ -131,6 +159,23 @@ class AutoGenOrchestrator:
             if not result.get("response") or result.get("response") == query:
                 self.logger.warning("Response is empty or same as query - workflow may not have executed")
 
+            # Check output safety before returning
+            final_response = result.get("response", "")
+            if final_response:
+                output_safety = self.safety_manager.check_output_safety(final_response)
+                if not output_safety.get("safe", True):
+                    self.logger.warning(f"Output safety check failed: {output_safety.get('violations', [])}")
+                    # Replace response with sanitized version or refusal message
+                    result["response"] = output_safety.get("response", final_response)
+                    result["metadata"]["output_safety"] = output_safety
+                    result["metadata"]["safety_violation"] = True
+                else:
+                    result["metadata"]["output_safety"] = output_safety
+
+            # Include safety events in metadata
+            result["metadata"]["safety_events"] = self.safety_manager.get_safety_events()
+            result["metadata"]["safety_stats"] = self.safety_manager.get_safety_stats()
+
             return result
 
         except asyncio.TimeoutError:
@@ -145,7 +190,8 @@ class AutoGenOrchestrator:
                 "metadata": {
                     "error": True,
                     "timeout": True,
-                    "revision_count": self.revision_count
+                    "revision_count": self.revision_count,
+                    "safety_events": self.safety_manager.get_safety_events()
                 }
             }
         except Exception as e:
@@ -160,7 +206,8 @@ class AutoGenOrchestrator:
                 "metadata": {
                     "error": True,
                     "error_type": type(e).__name__,
-                    "revision_count": self.revision_count
+                    "revision_count": self.revision_count,
+                    "safety_events": self.safety_manager.get_safety_events()
                 }
             }
 

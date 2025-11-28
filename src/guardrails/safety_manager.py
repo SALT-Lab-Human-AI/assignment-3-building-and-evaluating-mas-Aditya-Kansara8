@@ -8,6 +8,30 @@ import logging
 from datetime import datetime
 import json
 
+# Try to import Guardrails AI
+try:
+    from guardrails import Guard
+    # Note: guardrails-ai 0.6.8+ uses a different API structure
+    # Validators may need to be registered or used differently
+    # We'll use a fallback approach that works with or without specific validators
+    GUARDRAILS_AVAILABLE = True
+    GUARDRAILS_VALIDATORS_AVAILABLE = False
+
+    # Try to check if validators are available in the expected format
+    try:
+        from guardrails.validators import register_validator
+        # Check if we can use the validator system
+        GUARDRAILS_VALIDATORS_AVAILABLE = True
+    except ImportError:
+        GUARDRAILS_VALIDATORS_AVAILABLE = False
+except ImportError:
+    GUARDRAILS_AVAILABLE = False
+    GUARDRAILS_VALIDATORS_AVAILABLE = False
+    Guard = None
+
+from .input_guardrail import InputGuardrail
+from .output_guardrail import OutputGuardrail
+
 
 class SafetyManager:
     """
@@ -46,13 +70,38 @@ class SafetyManager:
         # Violation response strategy
         self.on_violation = config.get("on_violation", {})
 
-        # TODO: Initialize guardrail framework
-        # Examples:
-        # from guardrails import Guard
-        # self.guard = Guard(...)
-        # OR
-        # from nemoguardrails import RailsConfig
-        # self.rails = RailsConfig(...)
+        # Initialize guardrail framework
+        self.framework = config.get("framework", "guardrails").lower()
+
+        # Initialize input and output guardrails (these handle their own Guardrails AI integration)
+        self.input_guardrail = InputGuardrail(config)
+        self.output_guardrail = OutputGuardrail(config)
+
+        # Initialize Guardrails AI guards if available (for direct use in safety_manager)
+        # Note: guardrails-ai 0.6.8+ has a different API, so we use fallback validators
+        if GUARDRAILS_AVAILABLE and self.framework == "guardrails":
+            if GUARDRAILS_VALIDATORS_AVAILABLE:
+                try:
+                    # Try to use Guardrails AI with validators if available
+                    # This would work with older versions or if validators are properly registered
+                    self.input_guard = Guard()
+                    self.output_guard = Guard()
+                    self.logger.info("Guardrails AI framework initialized (using basic Guard)")
+                except Exception as e:
+                    self.logger.warning(f"Failed to initialize Guardrails AI: {e}. Using fallback implementation.")
+                    self.input_guard = None
+                    self.output_guard = None
+            else:
+                # Guardrails AI is installed but validators aren't in expected format
+                # Use fallback implementation which is more robust
+                self.logger.info("Guardrails AI installed but using fallback validators (newer API structure)")
+                self.input_guard = None
+                self.output_guard = None
+        else:
+            if not GUARDRAILS_AVAILABLE:
+                self.logger.warning("Guardrails AI not available. Install with: pip install guardrails-ai")
+            self.input_guard = None
+            self.output_guard = None
 
     def check_input_safety(self, query: str) -> Dict[str, Any]:
         """
@@ -63,40 +112,52 @@ class SafetyManager:
 
         Returns:
             Dictionary with 'safe' boolean and optional 'violations' list
-
-        TODO: YOUR CODE HERE
-        - Implement guardrail checks
-        - Detect harmful/inappropriate content
-        - Detect off-topic queries
-        - Return detailed violation information
         """
         if not self.enabled:
             return {"safe": True}
 
-        # TODO: Implement actual safety checks
-        # Example using Guardrails AI:
-        # result = self.guard.validate(query)
-        # if result.validation_passed:
-        #     return {"safe": True}
-        # else:
-        #     return {
-        #         "safe": False,
-        #         "violations": result.errors,
-        #         "sanitized_query": result.validated_output
-        #     }
-
-        # Placeholder implementation with simple keyword checks
         violations = []
+        sanitized_query = query
 
-        # Check for prohibited keywords (very basic example)
-        prohibited_keywords = ["hack", "attack", "exploit", "bypass"]
-        for keyword in prohibited_keywords:
-            if keyword.lower() in query.lower():
+        # Use Guardrails AI if available
+        if self.input_guard is not None:
+            try:
+                result = self.input_guard.validate(query)
+                if not result.validation_passed:
+                    # Guardrails AI returns validation results
+                    if hasattr(result, 'errors') and result.errors:
+                        violations.extend([
+                            {
+                                "category": "guardrails_validation",
+                                "reason": str(error),
+                                "severity": "high"
+                            }
+                            for error in result.errors
+                        ])
+                    elif hasattr(result, 'error') and result.error:
+                        violations.append({
+                            "category": "guardrails_validation",
+                            "reason": str(result.error),
+                            "severity": "high"
+                        })
+            except Exception as e:
+                # If guardrails validation fails, log and continue with fallback
+                self.logger.warning(f"Guardrails AI validation error: {e}. Using fallback checks.")
                 violations.append({
-                    "category": "potentially_harmful",
-                    "reason": f"Query contains prohibited keyword: {keyword}",
+                    "category": "validation_error",
+                    "reason": f"Guardrails validation failed: {str(e)}",
                     "severity": "medium"
                 })
+
+        # Use InputGuardrail for additional checks
+        input_validation = self.input_guardrail.validate(query)
+        if not input_validation.get("valid", True):
+            violations.extend(input_validation.get("violations", []))
+
+        # Check for prohibited categories
+        for category in self.prohibited_categories:
+            category_violations = self._check_prohibited_category(query, category)
+            violations.extend(category_violations)
 
         is_safe = len(violations) == 0
 
@@ -106,7 +167,8 @@ class SafetyManager:
 
         return {
             "safe": is_safe,
-            "violations": violations
+            "violations": violations,
+            "sanitized_query": sanitized_query
         }
 
     def check_output_safety(self, response: str) -> Dict[str, Any]:
@@ -118,26 +180,51 @@ class SafetyManager:
 
         Returns:
             Dictionary with 'safe' boolean and optional 'violations' list
-
-        TODO: YOUR CODE HERE
-        - Implement output guardrail checks
-        - Detect harmful content in responses
-        - Detect potential misinformation
-        - Sanitize or redact unsafe content
         """
         if not self.enabled:
             return {"safe": True, "response": response}
 
-        # TODO: Implement actual output safety checks
-        # Example checks:
-        # - No PII (personal identifiable information)
-        # - No harmful instructions
-        # - Factual consistency
-        # - No bias or offensive language
-
         violations = []
+        sanitized_response = response
 
-        # Placeholder implementation
+        # Use Guardrails AI if available
+        if self.output_guard is not None:
+            try:
+                result = self.output_guard.validate(response)
+                if not result.validation_passed:
+                    # Guardrails AI returns validation results
+                    if hasattr(result, 'errors') and result.errors:
+                        violations.extend([
+                            {
+                                "category": "guardrails_validation",
+                                "reason": str(error),
+                                "severity": "high"
+                            }
+                            for error in result.errors
+                        ])
+                    elif hasattr(result, 'error') and result.error:
+                        violations.append({
+                            "category": "guardrails_validation",
+                            "reason": str(result.error),
+                            "severity": "high"
+                        })
+            except Exception as e:
+                # If guardrails validation fails, log and continue with fallback
+                self.logger.warning(f"Guardrails AI validation error: {e}. Using fallback checks.")
+                violations.append({
+                    "category": "validation_error",
+                    "reason": f"Guardrails validation failed: {str(e)}",
+                    "severity": "medium"
+                })
+
+        # Use OutputGuardrail for additional checks
+        output_validation = self.output_guardrail.validate(response)
+        if not output_validation.get("valid", True):
+            violations.extend(output_validation.get("violations", []))
+            # Use sanitized output if available
+            if "sanitized_output" in output_validation:
+                sanitized_response = output_validation["sanitized_output"]
+
         is_safe = len(violations) == 0
 
         # Log safety event
@@ -147,14 +234,14 @@ class SafetyManager:
         result = {
             "safe": is_safe,
             "violations": violations,
-            "response": response
+            "response": sanitized_response if is_safe else response
         }
 
         # Apply sanitization if configured
         if not is_safe:
             action = self.on_violation.get("action", "refuse")
             if action == "sanitize":
-                result["response"] = self._sanitize_response(response, violations)
+                result["response"] = self._sanitize_response(sanitized_response, violations)
             elif action == "refuse":
                 result["response"] = self.on_violation.get(
                     "message",
@@ -167,10 +254,89 @@ class SafetyManager:
         """
         Sanitize response by removing or redacting unsafe content.
 
-        TODO: YOUR CODE HERE Implement sanitization logic
+        Args:
+            response: Original response
+            violations: List of violations found
+
+        Returns:
+            Sanitized response
         """
-        # Placeholder
-        return "[REDACTED] " + response
+        sanitized = response
+
+        # Redact based on violation types
+        for violation in violations:
+            category = violation.get("category", "")
+            if "pii" in category.lower() or "personal" in category.lower():
+                # Redact PII using output guardrail
+                output_validation = self.output_guardrail.validate(response)
+                if "sanitized_output" in output_validation:
+                    sanitized = output_validation["sanitized_output"]
+            elif "toxic" in category.lower() or "harmful" in category.lower():
+                # Replace harmful content with placeholder
+                sanitized = sanitized.replace(
+                    violation.get("reason", ""),
+                    "[Content removed due to safety policy]"
+                )
+
+        return sanitized
+
+    def _check_prohibited_category(self, content: str, category: str) -> List[Dict[str, Any]]:
+        """
+        Check if content violates a prohibited category.
+
+        Args:
+            content: Content to check
+            category: Category to check against
+
+        Returns:
+            List of violations
+        """
+        violations = []
+
+        if category == "harmful_content":
+            harmful_keywords = ["violence", "harmful", "dangerous", "illegal"]
+            for keyword in harmful_keywords:
+                if keyword.lower() in content.lower():
+                    violations.append({
+                        "category": category,
+                        "reason": f"Contains potentially harmful content: {keyword}",
+                        "severity": "high"
+                    })
+
+        elif category == "personal_attacks":
+            attack_patterns = ["you are", "you're", "stupid", "idiot", "hate"]
+            for pattern in attack_patterns:
+                if pattern.lower() in content.lower():
+                    violations.append({
+                        "category": category,
+                        "reason": f"Contains personal attack language: {pattern}",
+                        "severity": "medium"
+                    })
+
+        elif category == "misinformation":
+            # This would ideally use fact-checking, but for now we check for obvious red flags
+            misinformation_patterns = ["definitely false", "proven wrong", "debunked"]
+            for pattern in misinformation_patterns:
+                if pattern.lower() in content.lower():
+                    violations.append({
+                        "category": category,
+                        "reason": f"Potential misinformation detected: {pattern}",
+                        "severity": "high"
+                    })
+
+        elif category == "off_topic_queries":
+            # Check if query is completely off-topic (this is context-dependent)
+            # For HCI research system, off-topic might be non-research queries
+            off_topic_indicators = ["weather", "sports", "cooking recipe"]
+            for indicator in off_topic_indicators:
+                if indicator.lower() in content.lower() and len(content.split()) < 10:
+                    violations.append({
+                        "category": category,
+                        "reason": f"Query appears off-topic: {indicator}",
+                        "severity": "low"
+                    })
+
+        return violations
 
     def _log_safety_event(
         self,

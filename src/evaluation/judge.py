@@ -64,12 +64,17 @@ class LLMJudge:
         # Each criterion has: name, weight, description
         self.criteria = config.get("evaluation", {}).get("criteria", [])
 
+        # Load judge prompt configurations (for multiple independent prompts)
+        eval_config = config.get("evaluation", {})
+        self.num_judge_prompts = eval_config.get("num_judge_prompts", 2)  # Default: 2 independent prompts
+        self.judge_prompt_types = eval_config.get("judge_prompt_types", ["strict", "lenient"])
+
         # Initialize LLM client based on provider
         self.provider = self.model_config.get("provider", "openai").lower()
         self.backup_provider = self.model_config.get("backup_provider", "groq").lower()
         self._init_llm_client()
 
-        self.logger.info(f"LLMJudge initialized with {len(self.criteria)} criteria, provider: {self.provider}")
+        self.logger.info(f"LLMJudge initialized with {len(self.criteria)} criteria, {self.num_judge_prompts} judge prompts, provider: {self.provider}")
 
     def _init_llm_client(self):
         """Initialize LLM client using OpenAI API (primary) or Groq API (backup)."""
@@ -149,24 +154,49 @@ class LLMJudge:
         total_weight = sum(c.get("weight", 1.0) for c in self.criteria)
         weighted_score = 0.0
 
-        # Evaluate each criterion
+        # Evaluate each criterion with multiple independent judge prompts
         for criterion in self.criteria:
             criterion_name = criterion.get("name", "unknown")
             weight = criterion.get("weight", 1.0)
 
-            self.logger.info(f"Evaluating criterion: {criterion_name}")
+            self.logger.info(f"Evaluating criterion: {criterion_name} with {self.num_judge_prompts} independent judge prompts")
 
-            # TODO: Implement actual LLM judging
-            score = await self._judge_criterion(
-                criterion=criterion,
-                query=query,
-                response=response,
-                sources=sources,
-                ground_truth=ground_truth
-            )
+            # Get scores from multiple independent judge prompts
+            judge_scores = []
+            for prompt_idx in range(self.num_judge_prompts):
+                prompt_type = self.judge_prompt_types[prompt_idx] if prompt_idx < len(self.judge_prompt_types) else f"judge_{prompt_idx+1}"
 
-            results["criterion_scores"][criterion_name] = score
-            weighted_score += score.get("score", 0.0) * weight
+                self.logger.info(f"  Judge prompt {prompt_idx + 1}/{self.num_judge_prompts} ({prompt_type})")
+
+                score = await self._judge_criterion(
+                    criterion=criterion,
+                    query=query,
+                    response=response,
+                    sources=sources,
+                    ground_truth=ground_truth,
+                    prompt_type=prompt_type,
+                    prompt_index=prompt_idx
+                )
+
+                judge_scores.append(score)
+
+            # Aggregate scores from multiple judges (average)
+            avg_score = sum(s.get("score", 0.0) for s in judge_scores) / len(judge_scores) if judge_scores else 0.0
+            combined_reasoning = "\n\n".join([
+                f"Judge {i+1} ({self.judge_prompt_types[i] if i < len(self.judge_prompt_types) else f'judge_{i+1}'}): {s.get('reasoning', '')}"
+                for i, s in enumerate(judge_scores)
+            ])
+
+            aggregated_score = {
+                "score": avg_score,
+                "reasoning": combined_reasoning,
+                "criterion": criterion_name,
+                "judge_scores": [s.get("score", 0.0) for s in judge_scores],
+                "num_judges": len(judge_scores)
+            }
+
+            results["criterion_scores"][criterion_name] = aggregated_score
+            weighted_score += avg_score * weight
 
         # Calculate overall score
         results["overall_score"] = weighted_score / total_weight if total_weight > 0 else 0.0
@@ -179,10 +209,12 @@ class LLMJudge:
         query: str,
         response: str,
         sources: Optional[List[Dict[str, Any]]],
-        ground_truth: Optional[str]
+        ground_truth: Optional[str],
+        prompt_type: str = "default",
+        prompt_index: int = 0
     ) -> Dict[str, Any]:
         """
-        Judge a single criterion.
+        Judge a single criterion using a specific judge prompt type.
 
         Args:
             criterion: Criterion configuration
@@ -190,23 +222,27 @@ class LLMJudge:
             response: System response
             sources: Sources used
             ground_truth: Optional ground truth
+            prompt_type: Type of judge prompt ("strict", "lenient", etc.)
+            prompt_index: Index of this judge prompt (0-based)
 
         Returns:
             Score and feedback for this criterion
 
-        This is a basic implementation using Groq API.
+        This implementation uses multiple independent judge prompts for robust evaluation.
         """
         criterion_name = criterion.get("name", "unknown")
         description = criterion.get("description", "")
 
-        # Create judge prompt
+        # Create judge prompt with specific perspective
         prompt = self._create_judge_prompt(
             criterion_name=criterion_name,
             description=description,
             query=query,
             response=response,
             sources=sources,
-            ground_truth=ground_truth
+            ground_truth=ground_truth,
+            prompt_type=prompt_type,
+            prompt_index=prompt_index
         )
 
         # Call LLM API to get judgment
@@ -236,10 +272,12 @@ class LLMJudge:
         query: str,
         response: str,
         sources: Optional[List[Dict[str, Any]]],
-        ground_truth: Optional[str]
+        ground_truth: Optional[str],
+        prompt_type: str = "default",
+        prompt_index: int = 0
     ) -> str:
         """
-        Create a prompt for the judge LLM with detailed rubrics.
+        Create a prompt for the judge LLM with detailed rubrics and specific perspective.
 
         Args:
             criterion_name: Name of the criterion
@@ -248,14 +286,22 @@ class LLMJudge:
             response: System response to evaluate
             sources: Sources used
             ground_truth: Optional ground truth
+            prompt_type: Type of judge prompt ("strict", "lenient", etc.)
+            prompt_index: Index of this judge prompt
 
         Returns:
-            Formatted prompt with rubric
+            Formatted prompt with rubric and perspective
         """
         # Get detailed rubric for this criterion
         rubric = self._get_criterion_rubric(criterion_name)
 
+        # Get judge perspective/instructions based on prompt type
+        perspective_instructions = self._get_judge_perspective(prompt_type)
+
         prompt = f"""You are an expert evaluator assessing research responses. Evaluate the following response based on the criterion: {criterion_name}.
+
+JUDGE PERSPECTIVE: {prompt_type.upper()}
+{perspective_instructions}
 
 CRITERION: {criterion_name}
 Description: {description}
@@ -371,6 +417,56 @@ Score 0.5-0.69 (Fair): Response partially meets the criterion.
 Score 0.3-0.49 (Poor): Response poorly meets the criterion.
 Score 0.0-0.29 (Very Poor): Response does not meet the criterion.
 """)
+
+    def _get_judge_perspective(self, prompt_type: str) -> str:
+        """
+        Get judge perspective instructions based on prompt type.
+        This enables multiple independent evaluation perspectives.
+
+        Args:
+            prompt_type: Type of judge prompt ("strict", "lenient", "balanced", etc.)
+
+        Returns:
+            Perspective instructions for the judge
+        """
+        perspectives = {
+            "strict": """You are a STRICT evaluator. Apply high standards and be critical.
+- Only award high scores (0.9-1.0) for truly exceptional responses
+- Be thorough in identifying weaknesses and gaps
+- Require comprehensive coverage and high-quality evidence
+- Penalize minor issues more heavily
+- Focus on precision and completeness""",
+
+            "lenient": """You are a LENIENT evaluator. Be encouraging and focus on strengths.
+- Award credit for partial answers and effort
+- Focus on what the response does well
+- Be forgiving of minor issues
+- Consider the difficulty of the query
+- Emphasize improvement potential""",
+
+            "balanced": """You are a BALANCED evaluator. Consider both strengths and weaknesses fairly.
+- Evaluate objectively without being overly harsh or generous
+- Consider the context and complexity of the query
+- Balance comprehensiveness with practicality
+- Acknowledge both achievements and limitations
+- Provide constructive feedback""",
+
+            "academic": """You are an ACADEMIC evaluator. Focus on scholarly rigor and evidence.
+- Prioritize peer-reviewed sources and academic standards
+- Emphasize citation quality and source credibility
+- Require rigorous analysis and critical thinking
+- Value depth over breadth
+- Assess methodological soundness""",
+
+            "practical": """You are a PRACTICAL evaluator. Focus on usability and real-world application.
+- Prioritize clarity and actionable insights
+- Value practical examples and concrete recommendations
+- Emphasize user-friendliness and accessibility
+- Consider implementation feasibility
+- Assess real-world relevance"""
+        }
+
+        return perspectives.get(prompt_type.lower(), perspectives["balanced"])
 
     async def _call_judge_llm(self, prompt: str) -> str:
         """

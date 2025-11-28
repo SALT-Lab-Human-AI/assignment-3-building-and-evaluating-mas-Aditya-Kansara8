@@ -128,6 +128,10 @@ evaluation:
   enabled: true
   num_test_queries: 10
 
+  # Multiple independent judge prompts (≥2 required)
+  num_judge_prompts: 2  # Number of independent judge prompts per criterion
+  judge_prompt_types: ["strict", "lenient"]  # Types: "strict", "lenient", "balanced", "academic", "practical"
+
   # Judge criteria
   criteria:
     - name: "relevance"
