@@ -82,7 +82,13 @@ async def process_query(query: str) -> Dict[str, Any]:
 
         # Check for errors
         if "error" in result:
-            return result
+            # Even on error, include workflow_stages and conversation_history if available
+            error_result = result.copy()
+            if "workflow_stages" not in error_result:
+                error_result["workflow_stages"] = []
+            if "conversation_history" not in error_result:
+                error_result["conversation_history"] = []
+            return error_result
 
         # Extract citations and sources from conversation history
         citations, sources = extract_citations_and_sources(result)
@@ -101,12 +107,22 @@ async def process_query(query: str) -> Dict[str, Any]:
         metadata["safety_events"] = safety_events
         metadata["critique_score"] = calculate_quality_score(result)
 
-        return {
+        # Build return dictionary with all necessary fields
+        return_dict = {
             "query": query,
             "response": result.get("response", ""),
             "citations": citations,
+            "workflow_stages": result.get("workflow_stages", []),  # Include workflow stages
+            "conversation_history": result.get("conversation_history", []),  # Include conversation history
             "metadata": metadata
         }
+
+        # Debug: Log what we're returning (only in development)
+        if st.session_state.get("debug_mode", False):
+            st.write(f"Debug - Workflow stages: {return_dict.get('workflow_stages')}")
+            st.write(f"Debug - Conversation history length: {len(return_dict.get('conversation_history', []))}")
+
+        return return_dict
 
     except Exception as e:
         return {
@@ -114,6 +130,8 @@ async def process_query(query: str) -> Dict[str, Any]:
             "error": str(e),
             "response": f"An error occurred: {str(e)}",
             "citations": [],
+            "workflow_stages": [],  # Include empty workflow stages
+            "conversation_history": [],  # Include empty conversation history
             "metadata": {"error": True}
         }
 
@@ -264,11 +282,82 @@ def display_response(result: Dict[str, Any]):
             st.info(f"Error Type: {result['metadata']['error_type']}")
         return
 
-    # Display workflow stages
+    # Display response first - show complete final draft (Writer's draft, NOT Critic's evaluation)
+    st.markdown("### 📝 Response")
+    response = result.get("response", "")
+
+    # Verify that the response is actually from Writer, not Critic
+    # If it looks like a critique (contains evaluation keywords), find the Writer's draft instead
+    response_lower = response.lower() if response else ""
+    is_critique = any(keyword in response_lower for keyword in [
+        "thoroughly evaluated", "based on the following criteria", "relevance:",
+        "evidence quality:", "completeness:", "accuracy:", "clarity:",
+        "the response is", "the synthesis", "evaluated based"
+    ])
+
+    # If response looks like a critique, or is empty, find the Writer's draft
+    if is_critique or not response or len(response) < 50:
+        conversation_history = result.get("conversation_history", [])
+
+        # Strategy: Find the Writer draft that was approved (comes before "APPROVED" from Critic)
+        # First find the last "APPROVED" message
+        last_approved_index = -1
+        for i in range(len(conversation_history) - 1, -1, -1):
+            msg = conversation_history[i]
+            if msg.get("source") == "Critic":
+                content = msg.get("content", "").upper()
+                if "APPROVED" in content or "TERMINATE" in content:
+                    last_approved_index = i
+                    break
+
+        # Find the Writer draft before the approval
+        if last_approved_index > 0:
+            for i in range(last_approved_index - 1, -1, -1):
+                msg = conversation_history[i]
+                if msg.get("source") == "Writer":
+                    content = msg.get("content", "")
+                    if content and len(content) > 50:
+                        response = content
+                        break
+
+        # Fallback: Look for Writer message with "DRAFT COMPLETE"
+        if not response or is_critique:
+            for msg in reversed(conversation_history):
+                if msg.get("source") == "Writer":
+                    content = msg.get("content", "")
+                    if "DRAFT COMPLETE" in content.upper() and len(content) > 50:
+                        response = content
+                        break
+
+        # Last fallback: Get any substantial Writer message
+        if not response or is_critique:
+            for msg in reversed(conversation_history):
+                if msg.get("source") == "Writer":
+                    content = msg.get("content", "")
+                    if content and len(content) > 50:
+                        response = content
+                        break
+
+    # Display the complete response - use markdown to show full content without truncation
+    if response:
+        # Clean up any termination signals for display
+        display_response = response
+        termination_signals = ["DRAFT COMPLETE", "APPROVED - RESEARCH COMPLETE", "APPROVED-RESEARCH COMPLETE", "TERMINATE"]
+        for signal in termination_signals:
+            display_response = display_response.replace(signal, "").strip()
+
+        # Display in a container with proper formatting to ensure full visibility
+        st.markdown(display_response)
+    else:
+        st.warning("⚠️ No response available. The workflow may not have completed successfully.")
+
+    st.divider()
+
+    # Display workflow stages below the response (terminal-like format)
     workflow_stages = result.get("workflow_stages", [])
+    st.markdown("### 🔄 Workflow Stages")
+    st.markdown("----------------------------------------------------------------------")
     if workflow_stages:
-        st.markdown("### 🔄 Workflow Stages")
-        stage_cols = st.columns(len(workflow_stages))
         stage_icons = {
             "planning": "📋",
             "researching": "🔍",
@@ -276,17 +365,17 @@ def display_response(result: Dict[str, Any]):
             "critiquing": "✅",
             "revising": "🔄"
         }
-        for i, stage in enumerate(workflow_stages):
+        for stage in workflow_stages:
             icon = stage_icons.get(stage, "•")
-            with stage_cols[i]:
-                st.markdown(f"{icon} **{stage.replace('_', ' ').title()}**")
+            st.markdown(f"  {icon} {stage.replace('_', ' ').title()}")
+    else:
+        st.markdown("  ⚠️ No workflow stages recorded")
+    st.markdown("----------------------------------------------------------------------")
 
     st.divider()
 
-    # Display response
-    st.markdown("### 📝 Response")
-    response = result.get("response", "")
-    st.markdown(response)
+    # Display agent context and exchanges
+    display_agent_context_and_exchanges(result)
 
     # Display citations and sources
     citations, sources = extract_citations_and_sources(result)
@@ -349,6 +438,103 @@ def display_response(result: Dict[str, Any]):
     # Agent traces
     if st.session_state.show_traces:
         display_agent_traces_detailed(result)
+
+
+def display_agent_context_and_exchanges(result: Dict[str, Any]):
+    """
+    Display all agent context and information exchanges below the final response.
+    """
+    conversation_history = result.get("conversation_history", [])
+
+    st.markdown("### 🤖 Agent Context & Exchanges")
+
+    if not conversation_history:
+        st.info("ℹ️ No conversation history available. The agents may not have exchanged messages yet.")
+        return
+
+    # Agent icons mapping
+    agent_icons = {
+        "Planner": "📋",
+        "Researcher": "🔍",
+        "Writer": "✍️",
+        "Critic": "✅",
+        "System": "⚙️",
+        "user": "👤",
+        "User": "👤"
+    }
+
+    # Group messages by iteration for better organization
+    messages_by_iteration = {}
+    for msg in conversation_history:
+        iteration = msg.get("iteration", 1)
+        if iteration not in messages_by_iteration:
+            messages_by_iteration[iteration] = []
+        messages_by_iteration[iteration].append(msg)
+
+    # Display messages organized by iteration
+    for iteration in sorted(messages_by_iteration.keys()):
+        iteration_messages = messages_by_iteration[iteration]
+
+        # Show iteration header if there are multiple iterations
+        if len(messages_by_iteration) > 1:
+            st.markdown(f"#### Iteration {iteration}")
+
+        # Display each message
+        for i, msg in enumerate(iteration_messages, 1):
+            source = msg.get("source", "Unknown")
+            content = msg.get("content", "")
+            timestamp = msg.get("timestamp", None)
+
+            icon = agent_icons.get(source, "•")
+
+            # Create a container for each message
+            with st.container():
+                # Message header with agent name and icon
+                col1, col2 = st.columns([1, 4])
+                with col1:
+                    st.markdown(f"**{icon} {source}**")
+                with col2:
+                    if timestamp:
+                        try:
+                            dt = datetime.fromtimestamp(timestamp)
+                            st.caption(f"Time: {dt.strftime('%H:%M:%S')}")
+                        except (ValueError, TypeError, OSError):
+                            pass  # Invalid timestamp, skip displaying time
+
+                # Message content in an expandable/collapsible format
+                with st.expander(f"Message {i} from {source}", expanded=False):
+                    # Show full content
+                    st.markdown(content)
+
+                    # Show handoff signals if present
+                    handoff_signals = []
+                    content_upper = content.upper()
+                    if "PLAN COMPLETE" in content_upper:
+                        handoff_signals.append("✓ PLAN COMPLETE")
+                    if "RESEARCH COMPLETE" in content_upper:
+                        handoff_signals.append("✓ RESEARCH COMPLETE")
+                    if "DRAFT COMPLETE" in content_upper:
+                        handoff_signals.append("✓ DRAFT COMPLETE")
+                    if "APPROVED" in content_upper or "TERMINATE" in content_upper:
+                        handoff_signals.append("✓ APPROVED/TERMINATE")
+                    if "NEEDS REVISION" in content_upper:
+                        handoff_signals.append("⚠ NEEDS REVISION")
+
+                    if handoff_signals:
+                        st.markdown(f"**Handoff Signals:** {', '.join(handoff_signals)}")
+
+                # Show a preview of the message content
+                preview = content[:300] + "..." if len(content) > 300 else content
+                st.text_area(
+                    "",
+                    value=preview,
+                    height=80,
+                    key=f"exchange_{iteration}_{i}_{source}",
+                    disabled=True,
+                    label_visibility="collapsed"
+                )
+
+                st.divider()
 
 
 def display_agent_traces_detailed(result: Dict[str, Any]):

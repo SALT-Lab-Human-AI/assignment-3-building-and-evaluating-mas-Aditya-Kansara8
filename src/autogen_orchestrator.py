@@ -61,14 +61,8 @@ class AutoGenOrchestrator:
         self.max_iterations = system_config.get("max_iterations", 10)
         self.timeout_seconds = system_config.get("timeout_seconds", 300)
 
-        # Create the research team
-        self.logger.info("Creating research team...")
-        try:
-            self.team = create_research_team(config)
-            self.logger.info("Research team created successfully")
-        except Exception as e:
-            self.logger.error(f"Failed to create research team: {e}", exc_info=True)
-            raise
+        # Don't create team here - create it fresh for each query to avoid "already running" errors
+        self.logger.info("AutoGen orchestrator initialized (team will be created per query)")
 
         # Workflow state tracking
         self.workflow_trace: List[Dict[str, Any]] = []
@@ -170,6 +164,24 @@ class AutoGenOrchestrator:
                 }
             }
 
+    def _get_or_create_team(self):
+        """
+        Get or create a fresh team instance.
+        Creates a new team for each query to avoid "already running" errors.
+
+        Returns:
+            RoundRobinGroupChat team instance
+        """
+        try:
+            # Always create a fresh team to avoid state issues
+            self.logger.info("Creating fresh research team for this query...")
+            team = create_research_team(self.config)
+            self.logger.info("Research team created successfully")
+            return team
+        except Exception as e:
+            self.logger.error(f"Failed to create research team: {e}", exc_info=True)
+            raise
+
     async def _process_query_with_revisions(
         self,
         query: str,
@@ -196,6 +208,9 @@ class AutoGenOrchestrator:
         while iteration < self.max_iterations:
             iteration += 1
             self.logger.info(f"Starting iteration {iteration}/{self.max_iterations}")
+
+            # Create a fresh team for each iteration to avoid "already running" errors
+            team = self._get_or_create_team()
 
             # Check timeout
             elapsed = time.time() - start_time
@@ -244,7 +259,8 @@ Critic: Re-evaluate the revised draft. Say "APPROVED - RESEARCH COMPLETE" if app
                 self.logger.info(f"Running team with task message (length: {len(task_message)})")
 
                 # Run the team for this iteration
-                result = await self.team.run(task=task_message)
+                # Use the fresh team instance created for this query
+                result = await team.run(task=task_message)
 
                 self.logger.info(f"Team.run() completed. Checking result...")
 
@@ -459,17 +475,59 @@ Critic: Re-evaluate the revised draft. Say "APPROVED - RESEARCH COMPLETE" if app
         return "No previous critique found."
 
     def _extract_final_response(self, messages: List[Dict[str, Any]]) -> str:
-        """Extract the final response from messages."""
-        # Get the last message from Writer or Critic
+        """Extract the final response from messages - should be Writer's approved draft, NOT Critic's evaluation."""
+        # Strategy: Find the last Writer draft that was approved
+        # Look for the pattern: Writer says "DRAFT COMPLETE" -> Critic says "APPROVED"
+
+        # First, find the last "APPROVED" message from Critic to know which draft was approved
+        last_approved_index = -1
+        for i in range(len(messages) - 1, -1, -1):
+            msg = messages[i]
+            if msg.get("source") == "Critic":
+                content = msg.get("content", "").upper()
+                if "APPROVED" in content or "TERMINATE" in content:
+                    last_approved_index = i
+                    break
+
+        # Now find the Writer draft that comes before this approval
+        # This should be the final approved draft
+        if last_approved_index > 0:
+            # Look backwards from the approval to find the Writer's draft
+            for i in range(last_approved_index - 1, -1, -1):
+                msg = messages[i]
+                if msg.get("source") == "Writer":
+                    content = msg.get("content", "")
+                    # This is the draft that was approved
+                    if content and len(content) > 50:  # Ensure it's substantial
+                        return content
+
+        # Fallback: If no approval found, get the last Writer message with "DRAFT COMPLETE"
         for msg in reversed(messages):
-            if msg.get("source") in ["Writer", "Critic"]:
+            if msg.get("source") == "Writer":
                 content = msg.get("content", "")
-                # Skip termination signals
-                if "APPROVED" not in content.upper() and "TERMINATE" not in content.upper():
+                if "DRAFT COMPLETE" in content.upper():
+                    # Return the full draft content
                     return content
 
-        # Fallback: use last message
+        # Fallback: Get the last substantial Writer message
+        for msg in reversed(messages):
+            if msg.get("source") == "Writer":
+                content = msg.get("content", "")
+                # Skip if it's just a termination signal or very short
+                if content and len(content) > 50:
+                    return content
+
+        # Last resort: get last non-system, non-critic message (to avoid approval messages)
+        for msg in reversed(messages):
+            source = msg.get("source", "")
+            if source not in ["System", "user", "User", "Critic"]:
+                content = msg.get("content", "")
+                if content and len(content) > 50:
+                    return content
+
+        # Final fallback: use last message (but log a warning)
         if messages:
+            self.logger.warning("Could not find Writer draft, using last message as fallback")
             return messages[-1].get("content", "")
         return ""
 
