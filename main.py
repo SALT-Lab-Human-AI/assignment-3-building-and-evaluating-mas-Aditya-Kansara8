@@ -37,10 +37,12 @@ def run_web():
 
 
 async def run_evaluation():
-    """Run system evaluation."""
+    """Run system evaluation using SystemEvaluator."""
     import yaml
     from dotenv import load_dotenv
     from src.autogen_orchestrator import AutoGenOrchestrator
+    from src.evaluation.evaluator import SystemEvaluator
+    from pathlib import Path
 
     # Load environment variables
     load_dotenv()
@@ -49,32 +51,87 @@ async def run_evaluation():
     with open("config.yaml", 'r') as f:
         config = yaml.safe_load(f)
 
+    # Check if evaluation is enabled
+    eval_config = config.get("evaluation", {})
+    if not eval_config.get("enabled", True):
+        print("Evaluation is disabled in config.yaml")
+        return
+
     # Initialize AutoGen orchestrator
     print("Initializing AutoGen orchestrator...")
-    orchestrator = AutoGenOrchestrator(config)
+    try:
+        orchestrator = AutoGenOrchestrator(config)
+        print("✓ Orchestrator initialized successfully\n")
+    except Exception as e:
+        print(f"✗ Failed to initialize orchestrator: {e}")
+        print("Evaluation will continue with placeholder responses")
+        orchestrator = None
 
-    # For now, run a simple test query
-    # TODO: Integrate with SystemEvaluator for full evaluation
-    print("\n" + "=" * 70)
-    print("RUNNING TEST QUERY")
+    # Initialize evaluator
+    print("Initializing SystemEvaluator...")
+    evaluator = SystemEvaluator(config, orchestrator=orchestrator)
+    print("✓ Evaluator initialized\n")
+
+    # Determine test queries file
+    test_queries_path = "data/example_queries.json"
+    if not Path(test_queries_path).exists():
+        print(f"✗ Test queries file not found: {test_queries_path}")
+        print("Please ensure example_queries.json exists in the data/ directory")
+        return
+
     print("=" * 70)
-
-    test_query = "What are the key principles of accessible user interface design?"
-    print(f"\nQuery: {test_query}\n")
-
-    result = orchestrator.process_query(test_query)
-
-    print("\n" + "=" * 70)
-    print("RESULTS")
+    print("RUNNING SYSTEM EVALUATION")
     print("=" * 70)
-    print(f"\nResponse:\n{result.get('response', 'No response generated')}")
-    print(f"\nMetadata:")
-    print(f"  - Messages: {result.get('metadata', {}).get('num_messages', 0)}")
-    print(f"  - Sources: {result.get('metadata', {}).get('num_sources', 0)}")
+    print(f"\nTest queries file: {test_queries_path}")
+    print(f"Number of queries: {eval_config.get('num_test_queries', 'all')}")
+    print(f"Judge prompts: {eval_config.get('num_judge_prompts', 2)}")
+    print(f"Evaluation criteria: {len(eval_config.get('criteria', []))}")
+    print("\nThis may take several minutes depending on the number of queries...\n")
 
-    print("\n" + "=" * 70)
-    print("Note: Full evaluation with SystemEvaluator can be implemented")
-    print("=" * 70)
+    # Run evaluation
+    try:
+        report = await evaluator.evaluate_system(test_queries_path)
+
+        # Display summary
+        print("\n" + "=" * 70)
+        print("EVALUATION COMPLETE")
+        print("=" * 70)
+
+        summary = report.get("summary", {})
+        print(f"\nTotal Queries: {summary.get('total_queries', 0)}")
+        print(f"Successful: {summary.get('successful', 0)}")
+        print(f"Failed: {summary.get('failed', 0)}")
+        print(f"Success Rate: {summary.get('success_rate', 0.0):.2%}")
+
+        scores = report.get("scores", {})
+        print(f"\nOverall Average Score: {scores.get('overall_average', 0.0):.3f}")
+
+        print("\nScores by Criterion:")
+        for criterion, score in scores.get("by_criterion", {}).items():
+            print(f"  {criterion}: {score:.3f}")
+
+        # Show best and worst results
+        best = report.get("best_result")
+        worst = report.get("worst_result")
+
+        if best:
+            print(f"\nBest Result:")
+            print(f"  Query: {best.get('query', '')[:60]}...")
+            print(f"  Score: {best.get('score', 0.0):.3f}")
+
+        if worst:
+            print(f"\nWorst Result:")
+            print(f"  Query: {worst.get('query', '')[:60]}...")
+            print(f"  Score: {worst.get('score', 0.0):.3f}")
+
+        print("\n" + "=" * 70)
+        print("Detailed results saved to outputs/ directory")
+        print("=" * 70)
+
+    except Exception as e:
+        print(f"\n✗ Error during evaluation: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def run_autogen():
