@@ -1,0 +1,457 @@
+[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/r1tAQ0HC)
+# Multi-Agent Research System - Assignment 3
+
+A multi-agent system for deep research on HCI topics, featuring orchestrated agents, safety guardrails, and LLM-as-a-Judge evaluation.
+
+## Overview
+
+This template provides a starting point for building a multi-agent research assistant system. The system uses multiple specialized agents to:
+- Plan research tasks
+- Gather evidence from academic papers and web sources
+- Synthesize findings into coherent responses
+- Evaluate quality and verify accuracy
+- Ensure safety through guardrails
+
+## Project Structure
+
+```
+.
+├── src/
+│   ├── agents/              # Agent implementations
+│   │   ├── base_agent.py    # Base agent class
+│   │   ├── planner_agent.py # Task planning agent
+│   │   ├── researcher_agent.py # Evidence gathering agent
+│   │   ├── critic_agent.py  # Quality verification agent
+│   │   └── writer_agent.py  # Response synthesis agent
+│   ├── guardrails/          # Safety guardrails
+│   │   ├── safety_manager.py # Main safety coordinator
+│   │   ├── input_guardrail.py # Input validation
+│   │   └── output_guardrail.py # Output validation
+│   ├── tools/               # Research tools
+│   │   ├── web_search.py    # Web search integration
+│   │   ├── paper_search.py  # Academic paper search
+│   │   └── citation_tool.py # Citation formatting
+│   ├── evaluation/          # Evaluation system
+│   │   ├── judge.py         # LLM-as-a-Judge implementation
+│   │   └── evaluator.py     # System evaluator
+│   ├── ui/                  # User interfaces
+│   │   ├── cli.py           # Command-line interface
+│   │   └── streamlit_app.py # Web interface
+│   └── orchestrator.py      # Agent orchestration
+├── data/
+│   └── example_queries.json # Example test queries
+├── logs/                    # Log files (created at runtime)
+├── outputs/                 # Evaluation results (created at runtime)
+├── config.yaml              # System configuration
+├── requirements.txt         # Python dependencies
+├── .env.example            # Environment variables template
+└── main.py                 # Main entry point
+```
+
+## Setup Instructions
+
+### 1. Prerequisites
+
+- Python 3.9 or higher
+- `uv` package manager (recommended) or `pip`
+- Virtual environment
+
+### 2. Installation
+
+#### Installing uv (Recommended)
+
+`uv` is a fast Python package installer and resolver. Install it first:
+
+```bash
+# On macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# On Windows
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Alternative: Using pip
+pip install uv
+```
+
+#### Setting up the Project
+
+Clone the repository and navigate to the project directory:
+
+```bash
+cd is-492-assignment-3
+```
+
+**Option A: Using uv (Recommended - Much Faster)**
+
+```bash
+# Create virtual environment and install dependencies
+uv venv
+source .venv/bin/activate  # On macOS/Linux
+# OR
+.venv\Scripts\activate     # On Windows
+
+# Install dependencies
+uv pip install -r requirements.txt
+```
+
+**Option B: Using standard pip**
+
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate   # On macOS/Linux
+# OR
+venv\Scripts\activate      # On Windows
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 3. Security Setup (Important!)
+
+**Before committing any code**, set up pre-commit hooks to prevent API key leaks:
+
+```bash
+# Quick setup - installs hooks and runs security checks
+./scripts/install-hooks.sh
+
+# Or manually
+pre-commit install
+```
+
+This will automatically scan for hardcoded API keys and secrets before each commit. See `SECURITY_SETUP.md` for full details.
+
+### 4. API Keys Configuration
+
+Copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and add your API keys:
+
+```bash
+# Required: OpenAI API key for LLM (primary)
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Backup: Groq API key for LLM (used if OpenAI is unavailable)
+GROQ_API_KEY=your_groq_api_key_here
+
+# Recommended: At least one search API
+TAVILY_API_KEY=your_tavily_api_key_here
+# OR
+BRAVE_API_KEY=your_brave_api_key_here
+
+# Optional: For academic paper search (works without key, but with lower rate limits)
+SEMANTIC_SCHOLAR_API_KEY=your_key_here
+```
+
+#### Getting API Keys
+
+- **OpenAI** (Primary): [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys) - Paid, but high quality
+- **Groq** (Backup): [https://console.groq.com](https://console.groq.com) - Free tier available
+- **Tavily**: [https://www.tavily.com](https://www.tavily.com) - Student free quota available
+- **Brave Search**: [https://brave.com/search/api](https://brave.com/search/api)
+- **Semantic Scholar**: [https://www.semanticscholar.org/product/api](https://www.semanticscholar.org/product/api) - **Optional** - Works without API key (anonymous access with lower rate limits), but API key recommended for higher rate limits
+
+**Note**: The system uses OpenAI as the primary provider by default. If `OPENAI_API_KEY` is not set, it will automatically fall back to Groq. You can configure this in `config.yaml`.
+
+### 5. Configuration
+
+Edit `config.yaml` to customize your system:
+
+- Choose your research topic
+- **Configure agent prompts** (see below)
+- Set model preferences (OpenAI primary, Groq backup)
+- Define safety policies
+- Configure evaluation criteria
+
+#### Customizing Agent Prompts
+
+You can customize agent behavior by setting the `system_prompt` in `config.yaml`:
+
+```yaml
+agents:
+  planner:
+    system_prompt: |
+      You are an expert research planner specializing in HCI.
+      Focus on recent publications and seminal works.
+      After creating the plan, say "PLAN COMPLETE".
+```
+
+**Important**: Custom prompts must include handoff signals:
+- **Planner**: Must include `"PLAN COMPLETE"`
+- **Researcher**: Must include `"RESEARCH COMPLETE"`  
+- **Writer**: Must include `"DRAFT COMPLETE"`
+- **Critic**: Must include `"APPROVED - RESEARCH COMPLETE"` or `"NEEDS REVISION"`
+
+Leave `system_prompt: ""` (empty) to use the default prompts.
+
+## Implementation Guide
+
+This template provides the structure - you need to implement the core functionality. Here's what needs to be done:
+
+### Phase 1: Core Agent Implementation
+
+1. **Implement Agent Logic** (in `src/agents/`)
+   - [ ] Complete `planner_agent.py` - Integrate LLM to break down queries
+   - [ ] Complete `researcher_agent.py` - Integrate search APIs (Tavily, Semantic Scholar)
+   - [ ] Complete `critic_agent.py` - Implement quality evaluation logic
+   - [ ] Complete `writer_agent.py` - Implement synthesis with proper citations
+
+2. **Implement Tools** (in `src/tools/`)
+   - [ ] Complete `web_search.py` - Integrate Tavily or Brave API
+   - [ ] Complete `paper_search.py` - Integrate Semantic Scholar API
+   - [ ] Complete `citation_tool.py` - Implement APA citation formatting
+
+### Phase 2: Orchestration
+
+Choose your preferred framework to implement the multi-agent system. The current assignment template code uses AutoGen, but you can also choose to use other frameworks as you prefer (e.g., LangGraph and Crew.ai).
+
+
+3. **Update `orchestrator.py`**
+   - Integrate your chosen framework
+   - Implement the workflow: plan → research → write → critique → revise
+   - Add error handling
+
+### Phase 3: Safety Guardrails
+
+4. **Implement Guardrails** (in `src/guardrails/`)
+   - [ ] Choose framework: Guardrails AI or NeMo Guardrails
+   - [ ] Define safety policies in `safety_manager.py`
+   - [ ] Implement input validation in `input_guardrail.py`
+   - [ ] Implement output validation in `output_guardrail.py`
+   - [ ] Set up safety event logging
+
+### Phase 4: Evaluation
+
+5. **Implement LLM-as-a-Judge** (in `src/evaluation/`)
+   - [ ] Complete `judge.py` - Integrate LLM API for judging
+   - [ ] Define evaluation rubrics for each criterion
+   - [ ] Implement score parsing and aggregation
+
+6. **Create Test Dataset**
+   - [ ] Add more test queries to `data/example_queries.json`
+   - [ ] Define expected outputs or ground truths where possible
+   - [ ] Cover different query types and topics
+
+### Phase 5: User Interface
+
+7. **Complete UI** (choose one or both)
+   - [ ] Finish CLI implementation in `src/ui/cli.py`
+   - [ ] Finish web UI in `src/ui/streamlit_app.py`
+   - [ ] Display agent traces clearly
+   - [ ] Show citations and sources
+   - [ ] Indicate safety events
+
+## Running the System
+
+### Command Line Interface
+
+```bash
+python main.py --mode cli
+```
+
+### Web Interface
+
+```bash
+python main.py --mode web
+# OR directly:
+streamlit run src/ui/streamlit_app.py
+```
+
+### Running Evaluation
+
+```bash
+python main.py --mode evaluate
+```
+
+This will:
+- Load test queries from `data/example_queries.json`
+- Run each query through your system
+- Evaluate outputs using LLM-as-a-Judge
+- Generate report in `outputs/`
+
+## Reproducing Evaluation Results
+
+This section explains how to reproduce the evaluation results reported in the technical write-up.
+
+### Prerequisites
+
+1. **Complete Setup**: Ensure you have completed all setup steps above, including:
+   - Installing dependencies
+   - Configuring API keys in `.env`
+   - Setting up the virtual environment
+
+2. **Configuration**: The evaluation uses settings from `config.yaml`:
+   - Number of test queries: `evaluation.num_test_queries` (default: 10)
+   - Judge prompts: `evaluation.num_judge_prompts` (default: 2)
+   - Evaluation criteria: Defined in `evaluation.criteria`
+
+### Step-by-Step Reproduction
+
+1. **Verify Test Queries**:
+   ```bash
+   # Check that test queries file exists
+   cat data/example_queries.json
+   ```
+   The evaluation uses queries from `data/example_queries.json`. By default, it processes the first 10 queries (configurable in `config.yaml`).
+
+2. **Run Full Evaluation**:
+   ```bash
+   python main.py --mode evaluate
+   ```
+
+   This will:
+   - Process each test query through the multi-agent system
+   - Evaluate responses using LLM-as-a-Judge with 2 independent prompts
+   - Generate detailed results and summary statistics
+   - Save results to `outputs/` directory
+
+3. **Expected Output Files**:
+   After running evaluation, you should see files in `outputs/`:
+   - `evaluation_YYYYMMDD_HHMMSS.json`: Complete evaluation results
+   - `evaluation_summary_YYYYMMDD_HHMMSS.txt`: Human-readable summary
+
+4. **Verify Results**:
+   ```bash
+   # View the most recent summary
+   ls -lt outputs/evaluation_summary_*.txt | head -1 | xargs cat
+   ```
+
+### Understanding the Results
+
+The evaluation generates the following metrics:
+
+1. **Overall Statistics**:
+   - Total queries evaluated
+   - Success rate (queries processed successfully)
+   - Failed queries count
+
+2. **Average Scores by Criterion**:
+   - **Relevance** (weight: 0.25): How relevant the response is to the query
+   - **Evidence Quality** (weight: 0.25): Quality of citations and evidence
+   - **Factual Accuracy** (weight: 0.20): Factual correctness
+   - **Safety Compliance** (weight: 0.15): No unsafe content
+   - **Clarity** (weight: 0.15): Clarity and organization
+
+3. **Overall Average Score**: Weighted average across all criteria
+
+4. **Best and Worst Results**: Queries with highest and lowest scores
+
+### Reproducing Specific Results from Report
+
+If the technical report references specific evaluation results:
+
+1. **Check Configuration**: Ensure `config.yaml` matches the configuration used for the reported results:
+   ```yaml
+   evaluation:
+     num_test_queries: 10  # Match the number used in report
+     num_judge_prompts: 2
+     criteria: [...]  # Should match report criteria
+   ```
+
+2. **Use Same Test Queries**: The report should specify which queries were used. Ensure `data/example_queries.json` contains the same queries in the same order.
+
+3. **Model Configuration**: Ensure model settings match:
+   ```yaml
+   models:
+     judge:
+       provider: "openai"  # or "groq" as used in report
+       name: "gpt-4o-mini"  # Match the model used
+   ```
+
+4. **Run Evaluation**: Execute the evaluation command and compare results.
+
+### Analyzing Results
+
+To analyze evaluation results programmatically:
+
+```python
+import json
+from pathlib import Path
+
+# Load the most recent evaluation results
+results_files = sorted(Path("outputs").glob("evaluation_*.json"))
+if results_files:
+    with open(results_files[-1]) as f:
+        report = json.load(f)
+
+    # Print summary
+    print(f"Success Rate: {report['summary']['success_rate']:.2%}")
+    print(f"Overall Score: {report['scores']['overall_average']:.3f}")
+
+    # Print scores by criterion
+    for criterion, score in report['scores']['by_criterion'].items():
+        print(f"{criterion}: {score:.3f}")
+
+    # Find low-scoring queries for error analysis
+    low_scores = [
+        r for r in report['detailed_results']
+        if r.get('evaluation', {}).get('overall_score', 1.0) < 0.6
+    ]
+    print(f"\nQueries with score < 0.6: {len(low_scores)}")
+```
+
+### Troubleshooting
+
+**Issue**: Evaluation fails with API errors
+- **Solution**: Check that API keys are properly configured in `.env`
+- Verify API quotas haven't been exceeded
+
+**Issue**: Results differ from report
+- **Solution**:
+  - Verify `config.yaml` matches report configuration
+  - Check that test queries are in the same order
+  - Ensure same model versions are used (model behavior can vary)
+
+**Issue**: Evaluation takes too long
+- **Solution**:
+  - Reduce `evaluation.num_test_queries` in `config.yaml`
+  - Use faster models (e.g., `gpt-3.5-turbo` instead of `gpt-4o`)
+
+### Evaluation Results in Technical Report
+
+When writing your technical report, include:
+
+1. **Evaluation Setup**:
+   - Number of test queries used
+   - Judge prompts and criteria
+   - Model configurations
+
+2. **Results**:
+   - Overall average scores
+   - Scores by criterion
+   - Success rate and failure analysis
+
+3. **Error Analysis**:
+   - Low-scoring queries and reasons
+   - Common failure patterns
+   - Limitations identified
+
+4. **Interpretation**:
+   - What the scores mean
+   - System strengths and weaknesses
+   - Comparison to expectations
+
+See `outputs/README.md` for more details on the evaluation results structure.
+
+## Testing
+
+Run tests (if you create them):
+
+```bash
+pytest tests/
+```
+
+## Resources
+
+### Documentation
+- [uv Documentation](https://docs.astral.sh/uv/) - Fast Python package installer
+- [AutoGen Documentation](https://microsoft.github.io/autogen/)
+- [LangGraph Documentation](https://langchain-ai.github.io/langgraph/)
+- [Guardrails AI](https://docs.guardrailsai.com/)
+- [NeMo Guardrails](https://docs.nvidia.com/nemo/guardrails/)
+- [Tavily API](https://docs.tavily.com/)
+- [Semantic Scholar API](https://api.semanticscholar.org/)

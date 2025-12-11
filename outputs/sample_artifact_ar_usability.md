@@ -1,0 +1,94 @@
+# Research Report: Evolution of AR Usability (2018-2023)
+
+**Query:** How has AR usability evolved in the past 5 years?
+
+**Generated:** November 28, 2025  
+**System:** Multi-Agent Research Assistant  
+**Evaluation Score:** 0.75 / 1.0
+
+---
+
+## Introduction to AR Usability and Historical Context
+
+Augmented Reality (AR) usability refers to the efficiency, effectiveness, and satisfaction with which users can achieve tasks using AR technologies. Understanding the evolution of AR usability is crucial for enhancing user experience and expanding the adoption of AR applications. Around 2018, AR was primarily growing in sectors like gaming, retail, and training, often with limited field of view and interaction constraints.
+
+## Current Trends in AR Usability
+
+In recent years, AR has experienced significant advancements that have improved usability. Notably, the opening of the 6 GHz band by the FCC has been a major leap forward, providing faster, more reliable connections for AR/VR devices [1]. Additionally, technological improvements such as 5K and 8K stereoscopic video displays at the hardware level have significantly enhanced visual quality, making the experience more realistic and engaging [5].
+
+## Advances in AR User Interface and Experience Design
+
+The design of AR interfaces has also evolved, adopting more intuitive interaction patterns and better integration with real-world tasks. Modern AR applications often deploy advanced gesture recognition and voice commands, reducing the reliance on traditional input devices [2]. These features make AR interfaces more accessible and aligned with user expectations in a digitally interconnected environment.
+
+## Case Studies and Practical Implementations
+
+Significant progress in usability can be seen in educational tools and retail experiences. For example, AR is now prominently used in educational settings to create interactive learning experiences, significantly improving engagement and retention due to its immersive nature [3]. Retail applications have leveraged AR for virtual try-ons, enhancing the shopping experience by allowing virtual interaction with products in physical environments [4].
+
+## Comparative Analysis
+
+Compared to five years ago, AR usability has transitioned from experimental to more practical and user-centered deployments. This transition is marked by both hardware capabilities and sophisticated software interfaces that have addressed previous usability issues such as latency and realism [1, 5]. The development of frameworks for evaluating AR usability has also matured, leading to more consistent improvements in AR interfaces.
+
+## Conclusion and Future Research Directions
+
+As AR technology advances, usability remains a pivotal aspect of its development. Future research should focus on universal design principles that enhance accessibility and broad adoption across different user demographics. Moreover, leveraging AI and machine learning could further refine user interactions and feedback, creating a more personalized experience.
+
+---
+
+## References
+
+1. Emrich, T. (2023). Reality Check: Looking Back at Augmented Reality in 2023. LinkedIn. Retrieved from https://www.linkedin.com/pulse/reality-check-looking-back-augmented-2023-tom-emrich--yilvc
+
+2. MyWebAR. (2023). Augmented Reality Trends 2023. Retrieved from https://mywebar.com/blog/augmented-reality-trends-2023/
+
+3. IntechHouse. (2023). Augmented Reality and Virtual Reality as a Main Trend in 2023. Retrieved from https://intechhouse.com/blog/augmented-reality-and-virtual-reality-as-a-main-trend-in-2023/
+
+4. Southern Made. (2023). 2023's Augmented Reality Trends: A Fun and Informative Deep Dive. Retrieved from https://www.southernmade.com/2023-augmented-reality-trends
+
+5. ST Engineering Antycip. (2023). VR & AR trends to look out for in 2023. Retrieved from https://steantycip.com/blog/vr-ar-trends-to-look-out-for-in-2023/
+
+---
+
+## Evaluation Results
+
+**Overall Score:** 0.75 / 1.0
+
+### Scores by Criterion:
+
+- **Relevance:** 0.75 (Weight: 0.25)
+  - Judge 1 (strict): 0.7
+  - Judge 2 (lenient): 0.8
+
+- **Evidence Quality:** 0.6 (Weight: 0.25)
+  - Judge 1 (strict): 0.5
+  - Judge 2 (lenient): 0.7
+
+- **Factual Accuracy:** 0.75 (Weight: 0.20)
+  - Judge 1 (strict): 0.7
+  - Judge 2 (lenient): 0.8
+
+- **Safety Compliance:** 1.0 (Weight: 0.15)
+  - Judge 1 (strict): 1.0
+  - Judge 2 (lenient): 1.0
+
+- **Clarity:** 0.75 (Weight: 0.15)
+  - Judge 1 (strict): 0.7
+  - Judge 2 (lenient): 0.8
+
+---
+
+## Agent Workflow
+
+This response was generated through the following workflow stages:
+
+1. **Planning** - Planner agent created a research plan
+2. **Researching** - Researcher agent gathered 5 web sources
+3. **Writing** - Writer agent synthesized findings into a structured report
+4. **Critiquing** - Critic agent evaluated and approved the response
+
+**Total Messages Exchanged:** 7  
+**Sources Gathered:** 5  
+**Revisions:** 0
+
+---
+
+*This report was generated by the Multi-Agent Research Assistant system using AutoGen framework.*

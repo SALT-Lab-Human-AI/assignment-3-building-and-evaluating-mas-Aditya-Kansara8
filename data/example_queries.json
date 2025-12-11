@@ -26,7 +26,7 @@
       "hardware improvements",
       "application domains"
     ],
-    "ground_truth": null,
+    "ground_truth": "AR usability has evolved through improved hand tracking, better spatial understanding, reduced latency, more intuitive gesture controls, and expanded application domains from gaming to enterprise and healthcare.",
     "expected_sources": [
       "recent AR research papers",
       "CHI conference proceedings",
@@ -44,7 +44,7 @@
       "transparency",
       "student autonomy"
     ],
-    "ground_truth": null,
+    "ground_truth": "Key ethical considerations include algorithmic bias affecting student outcomes, privacy of student data, ensuring accessibility for all learners, transparency in AI decision-making, and maintaining student autonomy in learning processes.",
     "expected_sources": [
       "ethics papers",
       "educational technology research",
@@ -61,7 +61,7 @@
       "user testing",
       "physiological measures"
     ],
-    "ground_truth": null,
+    "ground_truth": "Approaches include standardized questionnaires (SUS, UEQ), analytics metrics (engagement, retention), user testing (usability studies, A/B testing), and physiological measures (eye tracking, heart rate). Each method has strengths: questionnaires are quick, analytics show behavior, testing reveals issues, and physiological measures provide objective data.",
     "expected_sources": [
       "UX research papers",
       "methodological papers",
@@ -163,11 +163,192 @@
       "user preferences",
       "design adaptations"
     ],
-    "ground_truth": null,
+    "ground_truth": "Cultural factors influence mobile app design through localization requirements, cultural dimensions (power distance, individualism, etc.), color and symbol preferences, and adaptation of interaction patterns to match cultural expectations.",
     "expected_sources": [
       "cross-cultural HCI research",
       "cultural studies",
       "international design case studies"
+    ]
+  },
+  {
+    "id": 11,
+    "query": "What are the main challenges in designing voice user interfaces?",
+    "category": "voice_interfaces",
+    "expected_topics": [
+      "speech recognition accuracy",
+      "error handling",
+      "conversation design",
+      "accessibility",
+      "privacy concerns"
+    ],
+    "ground_truth": "Main challenges include speech recognition accuracy in noisy environments, handling errors gracefully, designing natural conversation flows, ensuring accessibility for users with speech impairments, and addressing privacy concerns with always-listening devices.",
+    "expected_sources": [
+      "voice UI research papers",
+      "conversational design guidelines",
+      "accessibility studies"
+    ]
+  },
+  {
+    "id": 12,
+    "query": "How can gamification improve user engagement in educational apps?",
+    "category": "gamification",
+    "expected_topics": [
+      "game mechanics",
+      "motivation theory",
+      "learning outcomes",
+      "user engagement",
+      "design patterns"
+    ],
+    "ground_truth": "Gamification improves engagement through game mechanics like points, badges, leaderboards, and progress tracking. It leverages motivation theory (intrinsic and extrinsic motivation) to increase user participation and can improve learning outcomes when properly designed.",
+    "expected_sources": [
+      "gamification research",
+      "educational technology papers",
+      "motivation theory studies"
+    ]
+  },
+  {
+    "id": 13,
+    "query": "What are the key differences between responsive and adaptive web design?",
+    "category": "web_design",
+    "expected_topics": [
+      "responsive design",
+      "adaptive design",
+      "breakpoints",
+      "device detection",
+      "performance"
+    ],
+    "ground_truth": "Responsive design uses fluid grids and flexible layouts that adapt to any screen size. Adaptive design uses fixed layouts for specific device categories. Responsive is more flexible but can be slower; adaptive is faster but requires more maintenance.",
+    "expected_sources": [
+      "web design guidelines",
+      "comparative studies",
+      "performance analysis"
+    ]
+  },
+  {
+    "id": 14,
+    "query": "How does cognitive load theory apply to interface design?",
+    "category": "cognitive_load",
+    "expected_topics": [
+      "intrinsic load",
+      "extraneous load",
+      "germane load",
+      "design principles",
+      "information architecture"
+    ],
+    "ground_truth": "Cognitive load theory suggests interfaces should minimize extraneous load (unnecessary complexity) and intrinsic load (inherent difficulty), while supporting germane load (learning-relevant processing). This leads to principles like reducing visual clutter, clear information hierarchy, and progressive disclosure.",
+    "expected_sources": [
+      "cognitive psychology papers",
+      "HCI research on cognitive load",
+      "interface design guidelines"
+    ]
+  },
+  {
+    "id": 15,
+    "query": "What are best practices for designing mobile forms?",
+    "category": "form_design",
+    "expected_topics": [
+      "input types",
+      "validation",
+      "error messages",
+      "progressive disclosure",
+      "mobile constraints"
+    ],
+    "ground_truth": "Best practices include using appropriate input types (keyboard matching), inline validation, clear error messages, progressive disclosure for long forms, minimizing required fields, and optimizing for thumb-friendly interactions on mobile devices.",
+    "expected_sources": [
+      "mobile UX guidelines",
+      "form design research",
+      "usability studies"
+    ]
+  },
+  {
+    "id": 16,
+    "query": "How can dark mode be implemented to reduce eye strain?",
+    "category": "ui_design",
+    "expected_topics": [
+      "color contrast",
+      "accessibility",
+      "user preferences",
+      "implementation",
+      "health benefits"
+    ],
+    "ground_truth": "Dark mode reduces eye strain by lowering screen brightness, reducing blue light exposure, and improving contrast in low-light environments. Implementation should maintain sufficient contrast ratios (WCAG guidelines), provide user choice, and ensure readability across all content types.",
+    "expected_sources": [
+      "accessibility guidelines",
+      "visual ergonomics research",
+      "UI design best practices"
+    ]
+  },
+  {
+    "id": 17,
+    "query": "What role does microinteractions play in user experience?",
+    "category": "microinteractions",
+    "expected_topics": [
+      "feedback",
+      "affordances",
+      "delight",
+      "usability",
+      "design patterns"
+    ],
+    "ground_truth": "Microinteractions provide immediate feedback, communicate system status, guide user actions through affordances, and can create moments of delight. They improve usability by making interfaces feel responsive and intuitive, though they should be subtle and purposeful.",
+    "expected_sources": [
+      "UX design literature",
+      "interaction design research",
+      "usability studies"
+    ]
+  },
+  {
+    "id": 18,
+    "query": "How do information architecture principles apply to mobile apps?",
+    "category": "information_architecture",
+    "expected_topics": [
+      "navigation patterns",
+      "content organization",
+      "hierarchy",
+      "mobile constraints",
+      "user mental models"
+    ],
+    "ground_truth": "Information architecture for mobile apps requires simplified navigation (hamburger menus, tab bars), flat hierarchies (3-4 levels max), clear content organization, consideration of screen size constraints, and alignment with user mental models for mobile interaction patterns.",
+    "expected_sources": [
+      "information architecture research",
+      "mobile design guidelines",
+      "navigation pattern studies"
+    ]
+  },
+  {
+    "id": 19,
+    "query": "What are the accessibility requirements for web applications under WCAG 2.1?",
+    "category": "accessibility",
+    "expected_topics": [
+      "WCAG levels",
+      "perceivable",
+      "operable",
+      "understandable",
+      "robust",
+      "compliance"
+    ],
+    "ground_truth": "WCAG 2.1 requires web applications to be perceivable (text alternatives, captions), operable (keyboard accessible, no seizures), understandable (readable, predictable), and robust (compatible with assistive technologies). Compliance levels are A, AA (most common), and AAA.",
+    "expected_sources": [
+      "WCAG 2.1 guidelines",
+      "accessibility standards",
+      "compliance documentation"
+    ]
+  },
+  {
+    "id": 20,
+    "query": "How can user testing methods be adapted for remote research?",
+    "category": "user_research",
+    "expected_topics": [
+      "remote usability testing",
+      "tools and platforms",
+      "moderated vs unmoderated",
+      "challenges",
+      "best practices"
+    ],
+    "ground_truth": "Remote user testing can be moderated (real-time with researcher) or unmoderated (self-guided). Tools include screen sharing, video conferencing, and specialized platforms. Challenges include technical issues and reduced observation, but benefits include broader participant access and cost savings.",
+    "expected_sources": [
+      "user research methodology papers",
+      "remote testing studies",
+      "UX research tools documentation"
     ]
   }
 ]
