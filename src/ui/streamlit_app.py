@@ -210,13 +210,51 @@ def extract_citations_and_sources(result: Dict[str, Any]) -> tuple:
 
 
 def extract_safety_events(result: Dict[str, Any]) -> list:
-    """Extract safety events from result."""
+    """Extract safety events from result with policy categories."""
     safety_events = []
 
     # Check metadata for safety events
     metadata = result.get("metadata", {})
+
+    # Check input safety
+    input_safety = metadata.get("input_safety", {})
+    if not input_safety.get("safe", True):
+        violations = input_safety.get("violations", [])
+        for violation in violations:
+            safety_events.append({
+                "type": "blocked",
+                "reason": violation.get("reason", "Input safety violation detected"),
+                "category": violation.get("category", "unknown"),
+                "severity": violation.get("severity", "medium"),
+                "stage": "input"
+            })
+
+    # Check output safety
+    output_safety = metadata.get("output_safety", {})
+    if not output_safety.get("safe", True):
+        violations = output_safety.get("violations", [])
+        for violation in violations:
+            action = metadata.get("safety", {}).get("on_violation", {}).get("action", "refuse")
+            event_type = "sanitized" if action == "sanitize" else "blocked"
+            safety_events.append({
+                "type": event_type,
+                "reason": violation.get("reason", "Output safety violation detected"),
+                "category": violation.get("category", "unknown"),
+                "severity": violation.get("severity", "medium"),
+                "stage": "output"
+            })
+
+    # Check metadata safety_events list
     if metadata.get("safety_events"):
-        safety_events.extend(metadata.get("safety_events", []))
+        for event in metadata.get("safety_events", []):
+            # Ensure event has required fields
+            if "type" not in event:
+                event["type"] = "detected"
+            if "category" not in event:
+                event["category"] = "unknown"
+            if "severity" not in event:
+                event["severity"] = "medium"
+            safety_events.append(event)
 
     # Check conversation history for safety-related messages
     for msg in result.get("conversation_history", []):
@@ -225,6 +263,8 @@ def extract_safety_events(result: Dict[str, Any]) -> list:
             safety_events.append({
                 "type": "detected",
                 "reason": "Safety-related content detected in conversation",
+                "category": "conversation_analysis",
+                "severity": "low",
                 "agent": msg.get("source", "Unknown")
             })
 
@@ -284,59 +324,96 @@ def display_response(result: Dict[str, Any]):
 
     # Display response first - show complete final draft (Writer's draft, NOT Critic's evaluation)
     st.markdown("### 📝 Response")
-    response = result.get("response", "")
 
-    # Verify that the response is actually from Writer, not Critic
-    # If it looks like a critique (contains evaluation keywords), find the Writer's draft instead
-    response_lower = response.lower() if response else ""
-    is_critique = any(keyword in response_lower for keyword in [
-        "thoroughly evaluated", "based on the following criteria", "relevance:",
-        "evidence quality:", "completeness:", "accuracy:", "clarity:",
-        "the response is", "the synthesis", "evaluated based"
-    ])
+    # Always extract the Writer's final approved draft from conversation history
+    # This ensures we show the Writer's draft, not the Critic's evaluation or any other message
+    conversation_history = result.get("conversation_history", [])
+    response = ""
 
-    # If response looks like a critique, or is empty, find the Writer's draft
-    if is_critique or not response or len(response) < 50:
-        conversation_history = result.get("conversation_history", [])
-
+    # First, check if there's a final_response field (from saved sessions)
+    if result.get("final_response"):
+        response = result.get("final_response")
+    else:
         # Strategy: Find the Writer draft that was approved (comes before "APPROVED" from Critic)
-        # First find the last "APPROVED" message
+        # First find the last "APPROVED" message from Critic
         last_approved_index = -1
         for i in range(len(conversation_history) - 1, -1, -1):
             msg = conversation_history[i]
-            if msg.get("source") == "Critic":
+            source = msg.get("source", "")
+            if source == "Critic":
                 content = msg.get("content", "").upper()
                 if "APPROVED" in content or "TERMINATE" in content:
                     last_approved_index = i
                     break
 
         # Find the Writer draft before the approval
-        if last_approved_index > 0:
+        if last_approved_index >= 0:
             for i in range(last_approved_index - 1, -1, -1):
                 msg = conversation_history[i]
-                if msg.get("source") == "Writer":
+                source = msg.get("source", "")
+                if source == "Writer":
                     content = msg.get("content", "")
+                    # Make sure it's a substantial draft (not just a signal)
                     if content and len(content) > 50:
+                        # Use this draft - it's the one that was approved
                         response = content
                         break
 
-        # Fallback: Look for Writer message with "DRAFT COMPLETE"
-        if not response or is_critique:
+        # Fallback 1: Look for Writer message with "DRAFT COMPLETE" (most recent one)
+        if not response:
             for msg in reversed(conversation_history):
-                if msg.get("source") == "Writer":
-                    content = msg.get("content", "")
-                    if "DRAFT COMPLETE" in content.upper() and len(content) > 50:
-                        response = content
-                        break
-
-        # Last fallback: Get any substantial Writer message
-        if not response or is_critique:
-            for msg in reversed(conversation_history):
-                if msg.get("source") == "Writer":
+                source = msg.get("source", "")
+                if source == "Writer":
                     content = msg.get("content", "")
                     if content and len(content) > 50:
-                        response = content
-                        break
+                        content_upper = content.upper()
+                        if "DRAFT COMPLETE" in content_upper:
+                            response = content
+                            break
+
+        # Fallback 2: Get the most recent substantial Writer message
+        if not response:
+            # Collect all Writer messages and find the most substantial one
+            writer_messages = []
+            for msg in conversation_history:
+                source = msg.get("source", "")
+                if source == "Writer":
+                    content = msg.get("content", "")
+                    if content and len(content) > 100:
+                        # Make sure it's not just evaluation text
+                        content_lower = content.lower()
+                        is_evaluation = any(keyword in content_lower for keyword in [
+                            "thoroughly evaluated", "based on the following criteria",
+                            "evidence quality:", "completeness:", "accuracy:", "clarity:"
+                        ])
+                        if not is_evaluation:
+                            writer_messages.append((len(content), content))
+
+            # Use the longest/most substantial Writer message
+            if writer_messages:
+                writer_messages.sort(reverse=True, key=lambda x: x[0])
+                response = writer_messages[0][1]
+
+        # Fallback 3: If still no response, check the result's response field
+        # but only if it doesn't look like a generic message or evaluation
+        if not response:
+            result_response = result.get("response", "")
+            if result_response and len(result_response) > 100:
+                result_response_lower = result_response.lower()
+                # Check if it's not a generic completion message
+                is_generic = any(phrase in result_response_lower for phrase in [
+                    "synthesis of the research findings",
+                    "is now complete",
+                    "thank you for your positive evaluation",
+                    "if there's anything else you'd like to explore"
+                ])
+                # Check if it's not an evaluation
+                is_evaluation = any(keyword in result_response_lower for keyword in [
+                    "thoroughly evaluated", "based on the following criteria",
+                    "evidence quality:", "completeness:", "accuracy:", "clarity:"
+                ])
+                if not is_generic and not is_evaluation:
+                    response = result_response
 
     # Display the complete response - use markdown to show full content without truncation
     if response:
@@ -419,20 +496,38 @@ def display_response(result: Dict[str, Any]):
     if agents_involved:
         st.markdown(f"**Agents Involved:** {', '.join(agents_involved)}")
 
-    # Safety events
+    # Safety events with policy categories
     safety_events = extract_safety_events(result)
     if safety_events:
         with st.expander("🛡️ Safety Events", expanded=True):
             for event in safety_events:
                 event_type = event.get("type", "unknown")
                 reason = event.get("reason", "Safety event detected")
+                category = event.get("category", "unknown")
+                severity = event.get("severity", "medium")
 
+                # Display with policy category information
                 if event_type == "blocked":
                     st.error(f"⚠️ **BLOCKED:** {reason}")
+                    if category != "unknown":
+                        st.caption(f"**Policy Category:** {category.replace('_', ' ').title()} | **Severity:** {severity.title()}")
                 elif event_type == "sanitized":
                     st.warning(f"🔧 **SANITIZED:** {reason}")
+                    if category != "unknown":
+                        st.caption(f"**Policy Category:** {category.replace('_', ' ').title()} | **Severity:** {severity.title()}")
                 else:
                     st.info(f"ℹ️ **{event_type.upper()}:** {reason}")
+                    if category != "unknown":
+                        st.caption(f"**Policy Category:** {category.replace('_', ' ').title()} | **Severity:** {severity.title()}")
+    else:
+        # Show that safety checks passed
+        with st.expander("🛡️ Safety Status", expanded=False):
+            st.success("✅ **All safety checks passed** - No violations detected")
+            st.caption("Content was checked against: harmful_content, personal_attacks, misinformation, off_topic_queries")
+
+    # Evaluation results (if available)
+    if metadata.get("evaluation"):
+        display_evaluation_results(metadata.get("evaluation"))
 
     # Agent traces
     if st.session_state.show_traces:
@@ -534,6 +629,69 @@ def display_agent_context_and_exchanges(result: Dict[str, Any]):
                 )
 
                 st.divider()
+
+
+def display_evaluation_results(evaluation: Dict[str, Any]):
+    """
+    Display LLM-as-a-Judge evaluation results.
+
+    Args:
+        evaluation: Evaluation results dictionary
+    """
+    st.markdown("### 📊 LLM-as-a-Judge Evaluation Results")
+
+    overall_score = evaluation.get("overall_score", 0.0)
+
+    # Overall score metric
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        st.metric("Overall Score", f"{overall_score:.3f}", delta=None)
+
+    with col2:
+        # Score bar
+        score_percentage = overall_score * 100
+        st.progress(overall_score, text=f"{score_percentage:.1f}%")
+
+    st.divider()
+
+    # Criterion scores
+    criterion_scores = evaluation.get("criterion_scores", {})
+    if criterion_scores:
+        st.markdown("#### Scores by Criterion")
+
+        # Define criterion weights for display
+        criterion_weights = {
+            "relevance": 0.25,
+            "evidence_quality": 0.25,
+            "factual_accuracy": 0.20,
+            "safety_compliance": 0.15,
+            "clarity": 0.15
+        }
+
+        for criterion_name, score_data in criterion_scores.items():
+            score = score_data.get("score", 0.0)
+            reasoning = score_data.get("reasoning", "")
+            judge_scores = score_data.get("judge_scores", [])
+            weight = criterion_weights.get(criterion_name, 0.0)
+
+            with st.expander(f"**{criterion_name.replace('_', ' ').title()}** - Score: {score:.3f} (Weight: {weight:.0%})", expanded=False):
+                # Score visualization
+                col1, col2 = st.columns([1, 3])
+                with col1:
+                    st.metric("Score", f"{score:.3f}")
+                with col2:
+                    st.progress(score, text=f"{score*100:.1f}%")
+
+                # Judge scores if available
+                if judge_scores:
+                    st.caption(f"Individual Judge Scores: {', '.join([f'{s:.3f}' for s in judge_scores])}")
+
+                # Reasoning
+                if reasoning:
+                    st.markdown("**Reasoning:**")
+                    st.text(reasoning[:500] + "..." if len(reasoning) > 500 else reasoning)
+
+    st.divider()
 
 
 def display_agent_traces_detailed(result: Dict[str, Any]):

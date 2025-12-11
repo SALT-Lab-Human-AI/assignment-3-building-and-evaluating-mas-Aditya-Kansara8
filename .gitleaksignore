@@ -4,8 +4,7 @@
 # Example files and documentation
 *.example
 .env.example
-README.md
-ASSIGNMENT_INSTRUCTIONS.md
+
 
 # Test files with dummy credentials
 **/tests/**/*mock*.py
@@ -15,3 +14,6 @@ ASSIGNMENT_INSTRUCTIONS.md
 package-lock.json
 poetry.lock
 uv.lock
+
+# Evaluation outputs (may contain false positive secret detections)
+outputs/*.json
